@@ -19,22 +19,32 @@ class SemanticsModulatedAttention(nn.Module):
                        text_latent_dim,
                        num_heads,
                        dropout,
-                       rt_in_value=False):
+                       rt_in_value=False,
+                       retrieval_dim=None):
         super().__init__()
         self.rt_in_value = rt_in_value
         self.num_heads = num_heads
         self.head_dim = latent_dim // num_heads
         self.scale = self.head_dim ** -0.5
 
+        # Retrieval feature projection (V2: z_e dim -> latent_dim)
+        self.retrieval_dim = retrieval_dim if retrieval_dim is not None else latent_dim
+        if self.retrieval_dim != latent_dim:
+            self.re_motion_proj = nn.Linear(self.retrieval_dim, latent_dim)
+            self.re_text_proj = nn.Linear(self.retrieval_dim, latent_dim)
+        else:
+            self.re_motion_proj = nn.Identity()
+            self.re_text_proj = nn.Identity()
+
         # Normalization
         self.norm = nn.LayerNorm(latent_dim)
         self.text_norm = nn.LayerNorm(text_latent_dim)
-        
+
         # Query projection (只作用于motion tokens z)
         self.query = nn.Linear(latent_dim, latent_dim)
-        
+
         # Info fusion MLP: [t; R_m; R_t] -> info
-        # t, R_m, R_t 都是 latent_dim 维度
+        # t, R_m, R_t 都是 latent_dim 维度（R_m, R_t 经投影后）
         self.info_mlp = nn.Sequential(
             nn.Linear(3 * latent_dim, latent_dim),
             nn.GELU(),
@@ -43,10 +53,10 @@ class SemanticsModulatedAttention(nn.Module):
 
         # Key projection (作用于 [z, info])
         self.key = nn.Linear(latent_dim, latent_dim)
-        
+
         # Value projection (作用于 [z, R_m], 只包含motion-domain)
         self.value = nn.Linear(latent_dim, latent_dim)
-    
+
         # Output projection
         self.out_proj = nn.Linear(latent_dim, latent_dim)
         self.dropout = nn.Dropout(dropout)
@@ -64,9 +74,11 @@ class SemanticsModulatedAttention(nn.Module):
         B, N, D = x.shape
         H = self.num_heads
 
-        # 提取retrieval特征
-        re_motion = re_dict['re_motion'].squeeze(2)  # (B, K, D)
-        re_text = re_dict['re_text'].squeeze(2)      # (B, K, D)
+        # 提取retrieval特征并投影到 latent_dim（V2: D_retr -> latent_dim）
+        re_motion_raw = re_dict['re_motion'].squeeze(2)  # (B, K, D_retr)
+        re_text_raw = re_dict['re_text'].squeeze(2)      # (B, K, D_retr)
+        re_motion = self.re_motion_proj(re_motion_raw)    # (B, K, latent_dim)
+        re_text = self.re_text_proj(re_text_raw)          # (B, K, latent_dim)
 
         # 条件控制
         text_cond = (cond_type % 10 > 0).float()     # 是否使用text
