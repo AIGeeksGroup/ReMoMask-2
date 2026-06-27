@@ -146,6 +146,12 @@ if __name__ == '__main__':
 
     eval_val_loader, _ = get_dataset_motion_loader(dataset_opt_path, 32, 'test', device=opt.device)
 
+    # ---- Ablation flags ----
+    cfg_schedule = None
+    if getattr(opt, 'cfg_schedule', False):
+        cfg_schedule = torch.linspace(6.0, 2.0, opt.time_steps).tolist()
+        print(f'[ABL-01] Using CFG schedule: {cfg_schedule}')
+
     for file in os.listdir(model_dir):
         if opt.which_epoch != "all" and opt.which_epoch not in file:
             continue
@@ -159,6 +165,12 @@ if __name__ == '__main__':
         transformer_aux.to(opt.device)
         transformer_ts.to(opt.device)
         vq_model.to(opt.device)
+
+        # ABL-02: set rt_in_value on SSTA modules
+        if getattr(opt, 'rt_in_value', False):
+            for module in transformer_ts.semanticTransEncoder:
+                module.rt_in_value = True
+            print('[ABL-02] Set rt_in_value=True on all SSTA layers')
 
         fid = []
         div = []
@@ -178,7 +190,8 @@ if __name__ == '__main__':
                                                          time_steps=opt.time_steps, cond_scale=opt.cond_scale,
                                                          temperature=opt.temperature, topkr=opt.topkr,
                                                                        force_mask=opt.force_mask, cal_mm=True,
-                                                                       retriever = retriever)
+                                                                       retriever=retriever,
+                                                                       cfg_schedule=cfg_schedule)
             fid.append(best_fid)
             div.append(best_div)
             top1.append(Rprecision[0])

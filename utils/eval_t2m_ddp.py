@@ -587,7 +587,7 @@ def evaluation_res_transformer(out_dir, val_loader, trans_aux, trans_ts, vq_mode
 @torch.no_grad()
 def evaluation_mask_transformer_test(val_loader, vq_model, trans_aux, trans_ts, repeat_id, eval_wrapper,
                                 time_steps, cond_scale, temperature, topkr, gsample=True, force_mask=False, cal_mm=True,
-                                retriever=None):
+                                retriever=None, cfg_schedule=None):
     device = next(trans_ts.parameters()).device  # cuda:0
     trans_aux.eval()
     trans_ts.eval()
@@ -637,7 +637,8 @@ def evaluation_mask_transformer_test(val_loader, vq_model, trans_aux, trans_ts, 
                                       gsample=gsample, force_mask=force_mask)
                 mids_ts = trans_ts.generate(clip_text, m_length // 4, time_steps, cond_scale,
                                       temperature=temperature, topk_filter_thres=topkr,
-                                      gsample=gsample, force_mask=force_mask, n_j=J, re_dict=re_dict)
+                                      gsample=gsample, force_mask=force_mask, n_j=J, re_dict=re_dict,
+                                      cfg_schedule=cfg_schedule)
                 mids_aux.unsqueeze_(-1)
                 mids_ts.unsqueeze_(-1)
                 _, pred_motions = vq_model.forward_decoder(mids_aux, mids_ts)
@@ -652,7 +653,8 @@ def evaluation_mask_transformer_test(val_loader, vq_model, trans_aux, trans_ts, 
                                   force_mask=force_mask)
             mids_ts = trans_ts.generate(clip_text, m_length // 4, time_steps, cond_scale,
                                   temperature=temperature, topk_filter_thres=topkr,
-                                  force_mask=force_mask, n_j=J, re_dict=re_dict)
+                                  force_mask=force_mask, n_j=J, re_dict=re_dict,
+                                  cfg_schedule=cfg_schedule)
             mids_aux.unsqueeze_(-1)
             mids_ts.unsqueeze_(-1)
             _, pred_motions = vq_model.forward_decoder(mids_aux, mids_ts)

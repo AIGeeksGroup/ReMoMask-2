@@ -37,4 +37,11 @@ class EvalT2MOptions(BaseOptions):
         self.parser.add_argument('--source_motion', default='example_data/000612.npy', type=str, help="Source motion path for editing. (new_joint_vecs format .npy file)")
         self.parser.add_argument("--motion_length", default=0, type=int,
                                  help="Motion length for generation, only applicable with single text prompt.")
+
+        # Ablation flags
+        self.parser.add_argument('--cfg_schedule', action="store_true",
+                                 help='ABL-01: Use linearly decaying CFG scale (6.0 -> 2.0) instead of constant.')
+        self.parser.add_argument('--rt_in_value', action="store_true",
+                                 help='ABL-02: Include R_t in SSTA Value branch at inference time.')
+
         self.is_train = False
