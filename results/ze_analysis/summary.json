@@ -1,0 +1,50 @@
+{
+  "code_dim2d": 1024,
+  "code_dim1d": 512,
+  "nb_code2d": 256,
+  "nb_code1d": 512,
+  "num_quantizers": 6,
+  "J": 6,
+  "ze_raw_shape_example": [
+    1,
+    1024,
+    49,
+    6
+  ],
+  "num_samples": 2000,
+  "cosine_similarity": {
+    "mean": 0.61977,
+    "std": 0.254679,
+    "median": 0.677417,
+    "min": -0.553795,
+    "max": 0.998334
+  },
+  "isotropy_score": 0.0,
+  "effective_dim_ratio": 0.0107,
+  "effective_dims": 11,
+  "total_dims": 1024,
+  "participation_ratio": 4.92,
+  "mean_norm": 20.0112,
+  "std_norm": 8.0408,
+  "risk_high_anisotropy": true,
+  "risk_severe_collapse": false,
+  "top10_eigenvalues": [
+    0.122312,
+    0.085698,
+    0.067356,
+    0.041,
+    0.02489,
+    0.012156,
+    0.007445,
+    0.006663,
+    0.003979,
+    0.003021
+  ],
+  "bottom5_eigenvalues": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ]
+}
