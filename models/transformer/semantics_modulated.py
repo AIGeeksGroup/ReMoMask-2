@@ -18,8 +18,10 @@ class SemanticsModulatedAttention(nn.Module):
     def __init__(self, latent_dim,
                        text_latent_dim,
                        num_heads,
-                       dropout):
+                       dropout,
+                       rt_in_value=False):
         super().__init__()
+        self.rt_in_value = rt_in_value
         self.num_heads = num_heads
         self.head_dim = latent_dim // num_heads
         self.scale = self.head_dim ** -0.5
@@ -96,9 +98,8 @@ class SemanticsModulatedAttention(nn.Module):
         K = self.key(kv_input)  # (B, N+1, D)
 
         # ========== Value ==========
-        # V = W_v · concat([z, R_m])
-        # 这里只使用motion-domain特征
-        V_input = torch.cat([z_norm, R_m_pooled], dim=1)  # (B, N+1, D)
+        R_v = R_m_pooled + R_t_pooled if self.rt_in_value else R_m_pooled
+        V_input = torch.cat([z_norm, R_v], dim=1)  # (B, N+1, D)
         V = self.value(V_input)  # (B, N+1, D)
 
         # ========== Multi-Head Attention ==========

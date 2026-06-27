@@ -524,7 +524,8 @@ class MaskTransformer2D(nn.Module):
                  topk_filter_thres=0.9,
                  gsample=False,
                  force_mask=False,
-                 re_dict=None
+                 re_dict=None,
+                 cfg_schedule=None,
                  ):
         '''
         conds: tensor  (b, d)
@@ -557,7 +558,7 @@ class MaskTransformer2D(nn.Module):
         scores = torch.where(padding_mask, 1e5, 0.).reshape(batch_size, seq_len*n_j)
         starting_temperature = temperature
 
-        for timestep, steps_until_x0 in zip(torch.linspace(0, 1, timesteps, device=device), reversed(range(timesteps))):
+        for step_idx, (timestep, steps_until_x0) in enumerate(zip(torch.linspace(0, 1, timesteps, device=device), reversed(range(timesteps)))):
             # 0 < timestep < 1
             rand_mask_prob = self.noise_schedule(timestep)  # Tensor
 
@@ -578,10 +579,10 @@ class MaskTransformer2D(nn.Module):
             Preparing input
             '''
             # (b, num_token, seqlen)
-            # 前向传播
+            current_scale = cfg_schedule[step_idx] if cfg_schedule is not None else cond_scale
             logits = self.forward_with_cond_scale(ids, cond_vector=cond_vector,
                                                   padding_mask=padding_mask,
-                                                  cond_scale=cond_scale,
+                                                  cond_scale=current_scale,
                                                   force_mask=force_mask,
                                                   re_dict=re_dict)
 
