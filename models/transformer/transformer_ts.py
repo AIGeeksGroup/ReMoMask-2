@@ -114,7 +114,7 @@ class OutputProcess(nn.Module):
 class MaskTransformer2D(nn.Module):
     def __init__(self, code_dim, cond_mode, latent_dim=256, ff_size=1024, num_layers=8,
                  num_heads=4, dropout=0.1, clip_dim=512, cond_drop_prob=0.1,
-                 clip_version=None, opt=None, **kargs):
+                 clip_version=None, opt=None, retrieval_dim=None, **kargs):
         super(MaskTransformer2D, self).__init__()
         # latent_dim = latent_dim * 2
         # num_heads = num_heads * 2
@@ -125,6 +125,7 @@ class MaskTransformer2D(nn.Module):
         self.clip_dim = clip_dim
         self.dropout = dropout
         self.opt = opt
+        self.retrieval_dim = retrieval_dim
 
         self.cond_mode = cond_mode
         self.cond_drop_prob = cond_drop_prob
@@ -215,6 +216,7 @@ class MaskTransformer2D(nn.Module):
             'text_latent_dim': clip_dim,
             'num_heads': num_heads,
             'dropout': dropout,
+            'retrieval_dim': retrieval_dim,
         }
         self.semanticTransEncoder = nn.ModuleList()
         for i in range(num_layers):
