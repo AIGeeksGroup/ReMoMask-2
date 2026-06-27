@@ -50,9 +50,21 @@
 
 ## Traceability
 
-| REQ-ID | Phase |
-|--------|-------|
-| (To be filled by roadmapper) | |
+| REQ-ID | Phase | Status |
+|--------|-------|--------|
+| ABL-01 | Phase 1: Zero-Cost Ablations | Pending |
+| ABL-02 | Phase 1: Zero-Cost Ablations | Pending |
+| LA-01 | Phase 2: Latent-Aligned Retrieval | Pending |
+| LA-02 | Phase 2: Latent-Aligned Retrieval | Pending |
+| LA-03 | Phase 2: Latent-Aligned Retrieval | Pending |
+| LA-04 | Phase 2: Latent-Aligned Retrieval | Pending |
+| LA-05 | Phase 2: Latent-Aligned Retrieval | Pending |
+| LA-06 | Phase 2: Latent-Aligned Retrieval | Pending |
+| IR-01 | Phase 3: Iterative Dynamic Retrieval | Pending |
+| IR-02 | Phase 3: Iterative Dynamic Retrieval | Pending |
+| IR-03 | Phase 3: Iterative Dynamic Retrieval | Pending |
+| COMB-01 | Phase 4: Comprehensive Evaluation | Pending |
+| COMB-02 | Phase 4: Comprehensive Evaluation | Pending |
 
 ---
 *Defined: 2026-06-27*
