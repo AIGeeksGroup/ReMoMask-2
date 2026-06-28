@@ -76,7 +76,7 @@ def load_trans_aux(model_opt, which_model):
     return transformer
 
 
-def load_trans_ts(model_opt, which_model):
+def load_trans_ts(model_opt, which_model, retrieval_dim=None):
     transformer = MaskTransformer2D(code_dim=vq_model.code_dim2d,
                                       cond_mode='text',
                                       latent_dim=model_opt.latent_dim,
@@ -87,12 +87,13 @@ def load_trans_ts(model_opt, which_model):
                                       clip_dim=512,
                                       cond_drop_prob=model_opt.cond_drop_prob,
                                       clip_version=clip_version,
-                                      opt=model_opt)
+                                      opt=model_opt,
+                                      retrieval_dim=retrieval_dim)
     ckpt = torch.load(pjoin(model_opt.checkpoints_dir, model_opt.dataset_name, model_opt.name, 'model', which_model),
                       map_location=opt.device)
-    missing_keys, unexpected_keys = transformer.load_state_dict(ckpt['t2m_transformer_ts'], strict=False)
-    # assert len(unexpected_keys) == 0
-    # assert all([k.startswith('clip_model.') for k in missing_keys])
+    ckpt_key = 't2m_transformer_ts' if 't2m_transformer_ts' in ckpt else 'mask_transformer_ts'
+    missing_keys, unexpected_keys = transformer.load_state_dict(ckpt[ckpt_key], strict=False)
+    # V2: allow new SSTA retrieval projection layers to be missing
     print(f'Loading Mask Transformer {model_opt.name} from epoch {ckpt["ep"]}!', 'Value: ', ckpt['best_value'] if 'best_value' in ckpt.keys() else '')
     return transformer
 
@@ -194,15 +195,23 @@ if __name__ == '__main__':
     wrapper_opt = get_opt(dataset_opt_path, torch.device('cuda'))
     eval_wrapper = EvaluatorModelWrapper(wrapper_opt)
 
-    # load RAG model
-    # retriever_cfg["device"] = opt.device   # torch.device(type='cuda', index=0)
-    # retriever = load_retr_model(retriever_cfg)  
-    from hydra import initialize, compose
-    with initialize(config_path="Part_TMR/conf", version_base=None):
-        rag_cfg = compose(config_name="config") # 赋予omegacfg 功能
-        retriever = load_retr_model(rag_cfg)
-    retriever.to(opt.device)
-    retriever.eval()  
+    # load RAG model — V2 (z_e retrieval) or V1 (Part_TMR)
+    if getattr(opt, 'use_ze_retrieval', False):
+        from models.rag.ze_retriever import ZeRetriever
+        retriever = ZeRetriever(
+            database_path=opt.ze_database_path,
+            query_projector_path=opt.projector_path,
+        )
+        retriever.to(opt.device)
+        retriever.eval()
+        print(f"[V2] ZeRetriever loaded (database={opt.ze_database_path})")
+    else:
+        from hydra import initialize, compose
+        with initialize(config_path="Part_TMR/conf", version_base=None):
+            rag_cfg = compose(config_name="config")
+            retriever = load_retr_model(rag_cfg)
+        retriever.to(opt.device)
+        retriever.eval()
     print("rag model loaded")
     torch.cuda.empty_cache()
 
@@ -210,6 +219,12 @@ if __name__ == '__main__':
     opt.nb_joints = 21 if opt.dataset_name == 'kit' else 22
 
     eval_val_loader, eval_dataset = get_dataset_motion_loader(dataset_opt_path, 32, 'test', device=opt.device)
+
+    # ---- V2 retrieval_dim ----
+    retrieval_dim = getattr(opt, 'retrieval_dim', None)
+    if retrieval_dim is None and getattr(opt, 'use_ze_retrieval', False):
+        retrieval_dim = vq_model.code_dim2d
+    print(f"[Config] retrieval_dim={retrieval_dim}, rt_in_value={getattr(opt, 'rt_in_value', False)}")
 
     if not opt.traverse_res:
         file_res = opt.which_ckpt
@@ -229,7 +244,7 @@ if __name__ == '__main__':
         f = open(pjoin(out_path), 'a')
         print('===========================================', file=f, flush=True)
         mask_transformer_aux = load_trans_aux(model_opt, file)
-        mask_transformer_ts = load_trans_ts(model_opt, file)
+        mask_transformer_ts = load_trans_ts(model_opt, file, retrieval_dim=retrieval_dim)
 
     print(opt.mtrans_name, file=f, flush=True)
     print(opt.rtrans_name, file=f, flush=True)
@@ -242,7 +257,7 @@ if __name__ == '__main__':
         print('loading checkpoint {}'.format(file))
         if not opt.traverse_res:
             mask_transformer_aux = load_trans_aux(model_opt, file)
-            mask_transformer_ts = load_trans_ts(model_opt, file)
+            mask_transformer_ts = load_trans_ts(model_opt, file, retrieval_dim=retrieval_dim)
         else:
             res_transformer_aux = load_res_aux(res_opt, file)
             res_transformer_ts = load_res_ts(res_opt, file)
@@ -251,6 +266,12 @@ if __name__ == '__main__':
         vq_model.eval()
         res_transformer_aux.eval()
         res_transformer_ts.eval()
+
+        # ABL-02: set rt_in_value on SSTA modules
+        if getattr(opt, 'rt_in_value', False):
+            for module in mask_transformer_ts.semanticTransEncoder:
+                module.rt_in_value = True
+            print('[ABL-02] Set rt_in_value=True on all SSTA layers')
 
         mask_transformer_aux.to(opt.device)
         mask_transformer_ts.to(opt.device)

@@ -44,4 +44,15 @@ class EvalT2MOptions(BaseOptions):
         self.parser.add_argument('--rt_in_value', action="store_true",
                                  help='ABL-02: Include R_t in SSTA Value branch at inference time.')
 
+        # V2 retrieval flags (LA-05)
+        self.parser.add_argument('--use_ze_retrieval', action='store_true',
+                                 help='Use z_e latent space retrieval (V2) instead of Part_TMR (V1)')
+        self.parser.add_argument('--ze_database_path', type=str, default='database_ze',
+                                 help='Path to z_e retrieval database directory')
+        self.parser.add_argument('--projector_path', type=str,
+                                 default='logs/query_projector/best_projector.pt',
+                                 help='Path to trained query projector checkpoint')
+        self.parser.add_argument('--retrieval_dim', type=int, default=None,
+                                 help='Retrieval feature dimension for SSTA (default: auto from VQ code_dim2d when V2)')
+
         self.is_train = False

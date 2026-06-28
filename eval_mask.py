@@ -60,7 +60,7 @@ def load_trans_aux(model_opt, which_model):
     return transformer
 
 
-def load_trans_ts(model_opt, which_model):
+def load_trans_ts(model_opt, which_model, retrieval_dim=None):
     transformer = MaskTransformer2D(code_dim=vq_model.code_dim2d,
                                       cond_mode='text',
                                       latent_dim=model_opt.latent_dim,
@@ -71,12 +71,21 @@ def load_trans_ts(model_opt, which_model):
                                       clip_dim=512,
                                       cond_drop_prob=model_opt.cond_drop_prob,
                                       clip_version=clip_version,
-                                      opt=model_opt)
+                                      opt=model_opt,
+                                      retrieval_dim=retrieval_dim)
     ckpt = torch.load(pjoin(model_opt.checkpoints_dir, model_opt.dataset_name, model_opt.name, 'model', which_model),
                       map_location=opt.device)
-    missing_keys, unexpected_keys = transformer.load_state_dict(ckpt['t2m_transformer_ts'], strict=False)
+    # checkpoint key: t2m_transformer_ts (from eval save) or mask_transformer_ts (from trainer save)
+    ckpt_key = 't2m_transformer_ts' if 't2m_transformer_ts' in ckpt else 'mask_transformer_ts'
+    missing_keys, unexpected_keys = transformer.load_state_dict(ckpt[ckpt_key], strict=False)
     assert len(unexpected_keys) == 0
-    assert all([k.startswith('clip_model.') for k in missing_keys])
+    # V2: allow new SSTA retrieval projection layers to be missing from V1 checkpoint
+    def _is_allowed_missing(k):
+        return (k.startswith('clip_model.')
+                or 're_motion_proj.' in k
+                or 're_text_proj.' in k)
+    assert all([_is_allowed_missing(k) for k in missing_keys]), \
+        f"Unexpected missing keys: {[k for k in missing_keys if not _is_allowed_missing(k)]}"
     print(f'Loading Mask Transformer {model_opt.name} from epoch {ckpt["ep"]}!', 'Value: ', ckpt['best_value'] if 'best_value' in ckpt.keys() else '')
     return transformer
 
@@ -131,12 +140,23 @@ if __name__ == '__main__':
 
 
 
-    from hydra import initialize, compose
-    with initialize(config_path="Part_TMR/conf", version_base=None):
-        rag_cfg = compose(config_name="config") # 赋予omegacfg 功能
-    retriever = load_retr_model(rag_cfg)
-    retriever.to(opt.device)
-    retriever.eval()  
+    # load RAG model — V2 (z_e retrieval) or V1 (Part_TMR)
+    if getattr(opt, 'use_ze_retrieval', False):
+        from models.rag.ze_retriever import ZeRetriever
+        retriever = ZeRetriever(
+            database_path=opt.ze_database_path,
+            query_projector_path=opt.projector_path,
+        )
+        retriever.to(opt.device)
+        retriever.eval()
+        print(f"[V2] ZeRetriever loaded (database={opt.ze_database_path})")
+    else:
+        from hydra import initialize, compose
+        with initialize(config_path="Part_TMR/conf", version_base=None):
+            rag_cfg = compose(config_name="config")
+        retriever = load_retr_model(rag_cfg)
+        retriever.to(opt.device)
+        retriever.eval()
     print("rag model loaded")
     torch.cuda.empty_cache()
 
@@ -145,6 +165,12 @@ if __name__ == '__main__':
     opt.nb_joints = 21 if opt.dataset_name == 'kit' else 22
 
     eval_val_loader, _ = get_dataset_motion_loader(dataset_opt_path, 32, 'test', device=opt.device)
+
+    # ---- V2 retrieval_dim ----
+    retrieval_dim = getattr(opt, 'retrieval_dim', None)
+    if retrieval_dim is None and getattr(opt, 'use_ze_retrieval', False):
+        retrieval_dim = vq_model.code_dim2d
+    print(f"[Config] retrieval_dim={retrieval_dim}, rt_in_value={getattr(opt, 'rt_in_value', False)}")
 
     # ---- Ablation flags ----
     cfg_schedule = None
@@ -157,7 +183,7 @@ if __name__ == '__main__':
             continue
         print('loading checkpoint {}'.format(file))
         transformer_aux = load_trans_aux(model_opt, file)
-        transformer_ts = load_trans_ts(model_opt, file)
+        transformer_ts = load_trans_ts(model_opt, file, retrieval_dim=retrieval_dim)
         transformer_aux.eval()
         transformer_ts.eval()
         vq_model.eval()
