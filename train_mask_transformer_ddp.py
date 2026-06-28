@@ -25,9 +25,7 @@ os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 from models.rag.t2m_retriever import MocoTmrRetriever
 from hydra import initialize, compose
 with initialize(config_path="Part_TMR/conf", version_base=None):
-    retriever_cfg = compose(config_name="config") # 赋予omegacfg 功能
-# from config import retriever_cfg
-# retriever_cfg['tmr_model_path'] = 'Part_TMR/checkpoints/exp1/HumanML3D'
+    retriever_cfg = compose(config_name="config")
 # ********** Ablation Config ***********
 
 
@@ -74,6 +72,19 @@ def load_vq_model():
 if __name__ == '__main__':
     # 原生参数
     parser = TrainT2MOptions()
+
+    # V2 retrieval flags (LA-05)
+    parser.parser.add_argument('--use_ze_retrieval', action='store_true',
+                               help='Use z_e latent space retrieval (V2) instead of Part_TMR (V1)')
+    parser.parser.add_argument('--ze_database_path', type=str, default='database_ze',
+                               help='Path to z_e retrieval database directory')
+    parser.parser.add_argument('--projector_path', type=str,
+                               default='logs/query_projector/best_projector.pt',
+                               help='Path to trained query projector checkpoint')
+    parser.parser.add_argument('--rt_in_value', action='store_true',
+                               help='Include R_t in SSTA Value branch (Phase 1 ABL-02 finding)')
+    parser.parser.add_argument('--retrieval_dim', type=int, default=None,
+                               help='Retrieval feature dimension for SSTA (default: auto from VQ code_dim2d when V2)')
 
     # 加载命令行参数
     opt = parser.parse()
@@ -144,9 +155,33 @@ if __name__ == '__main__':
     vq_model, vq_opt = load_vq_model()
 
     clip_version = 'ViT-B/32'
-    # load RAG model
-    # retriever_cfg["device"] = opt.device   # torch.device(type='cuda', index=0)
-    retriever = load_retr_model(retriever_cfg).to(opt.device).eval()  
+
+    # load RAG model — V2 (z_e retrieval) or V1 (Part_TMR)
+    if opt.use_ze_retrieval:
+        # DDP safety: verify database_ze/ exists before continuing
+        import json as _json
+        meta_path = os.path.join(opt.ze_database_path, 'metadata.json')
+        assert os.path.exists(meta_path), (
+            f"database_ze metadata missing: {meta_path}. "
+            f"Run build_rag_database_ze.py first (LA-02)."
+        )
+        with open(meta_path) as _f:
+            _meta = _json.load(_f)
+        print(f"[Rank {rank}] Loaded ze database: "
+              f"code_dim2d={_meta.get('code_dim2d', 'N/A')}, "
+              f"samples={_meta.get('num_samples', 'N/A')}")
+
+        from models.rag.ze_retriever import ZeRetriever
+        retriever = ZeRetriever(
+            database_path=opt.ze_database_path,
+            query_projector_path=opt.projector_path,
+            top_k=retriever_cfg.rag.top_k,
+            num_retrieval=retriever_cfg.rag.num_retrieval,
+            use_shuffle=retriever_cfg.rag.use_shuffle,
+        ).to(opt.device).eval()
+        print(f"[V2] ZeRetriever loaded (database={opt.ze_database_path})")
+    else:
+        retriever = load_retr_model(retriever_cfg).to(opt.device).eval()
     print("rag model loaded")
     torch.cuda.empty_cache()
     
@@ -165,6 +200,12 @@ if __name__ == '__main__':
                                       clip_version=clip_version,
                                       opt=opt)
 
+    # retrieval_dim: auto-detect from VQ code_dim2d when V2, or use CLI override
+    retrieval_dim = opt.retrieval_dim
+    if retrieval_dim is None and opt.use_ze_retrieval:
+        retrieval_dim = vq_model.code_dim2d  # 1024 for z_e space
+    print(f"[Config] retrieval_dim={retrieval_dim}, rt_in_value={opt.rt_in_value}")
+
     t2m_transformer_ts = MaskTransformer2D(code_dim=vq_model.code_dim2d,
                                       cond_mode='text',
                                       latent_dim=opt.latent_dim,
@@ -175,7 +216,14 @@ if __name__ == '__main__':
                                       clip_dim=512,
                                       cond_drop_prob=opt.cond_drop_prob,
                                       clip_version=clip_version,
-                                      opt=opt)
+                                      opt=opt,
+                                      retrieval_dim=retrieval_dim)
+
+    # Phase 1 ABL-02: set rt_in_value on SSTA layers (default True for V2)
+    if opt.rt_in_value:
+        for module in t2m_transformer_ts.semanticTransEncoder:
+            module.rt_in_value = True
+        print('[ABL-02] Set rt_in_value=True on all SSTA layers')
     
     all_params = 0
     pc_transformer_aux = sum(param.numel() for param in t2m_transformer_aux.parameters_wo_clip())
