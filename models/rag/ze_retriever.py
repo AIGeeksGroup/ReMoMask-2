@@ -81,9 +81,11 @@ class ZeRetriever(nn.Module):
         self.query_projector = None
         if query_projector_path is not None and os.path.exists(query_projector_path):
             print(f"Loading query projector from {query_projector_path}")
-            self.query_projector = torch.load(query_projector_path, map_location='cpu')
+            from models.rag.query_projector import load_projector
+            self.query_projector = load_projector(query_projector_path, map_location='cpu')
             self.query_projector.eval()
-            print("  Query projector loaded.")
+            print(f"  Query projector loaded (clip_dim={self.query_projector.clip_dim}, "
+                  f"ze_dim={self.query_projector.ze_dim}).")
         else:
             print("  No query projector loaded; using raw CLIP text for retrieval "
                   "(cross-space matching, suboptimal).")
@@ -98,6 +100,25 @@ class ZeRetriever(nn.Module):
             self._clip_model, _ = clip.load("ViT-B/32", device=device, jit=False)
             self._clip_model.eval()
             self._clip_device = device
+
+    # ---- MocoTmrRetriever-compatible text encoding interface ----
+    # Used by MaskTransformerTrainer.tokenize() / encode_text()
+
+    def tokenize(self, text):
+        """Tokenize text (same as MocoTmrRetriever.tokenize)."""
+        return clip.tokenize(text, truncate=True)
+
+    def encode_text(self, text_ids):
+        """Encode pre-tokenized text IDs to CLIP embeddings.
+
+        Matches MocoTmrRetriever.encode_text(text_ids) -> (B, 512).
+        """
+        device = self.motion_features.device
+        self._ensure_clip(device)
+        text_ids = text_ids.to(device)
+        with torch.inference_mode():
+            text_embedding = self._clip_model.encode_text(text_ids).float()
+        return text_embedding
 
     def encode_query_text(self, caption: str) -> torch.Tensor:
         """Encode a text caption to the retrieval space.
@@ -181,7 +202,7 @@ class ZeRetriever(nn.Module):
         return self.get_knn_samples(caption, k=k)
 
     def forward(self, captions: List[str], *args, **kwargs) -> dict:
-        """Batch retrieval, returning re_dict compatible with MocoTmrRetriever.
+        """Batch retrieval, returning re_dict compatible with SSTA.
 
         Args:
             captions: list of B caption strings
@@ -190,7 +211,10 @@ class ZeRetriever(nn.Module):
         Returns:
             re_dict with:
                 - re_motion: (B, K, 1, code_dim2d) z_e features of retrieved motions
-                - re_text: (B, K, 1, 512) CLIP text features of retrieved captions
+                - re_text: (B, K, 1, D_text) text features of retrieved captions
+                  When query_projector is loaded: D_text = code_dim2d (1024),
+                  projected into z_e space for consistent SSTA input.
+                  Without projector (V1 fallback): D_text = 512 (raw CLIP).
         """
         k = kwargs.get('k', self.top_k)
         b = len(captions)
@@ -208,8 +232,17 @@ class ZeRetriever(nn.Module):
         selected_motions = self.motion_features[flat_indexes]  # (B*K, code_dim2d)
         selected_texts = self.text_features[flat_indexes]      # (B*K, 512)
 
+        # When query_projector is available, project re_text from CLIP 512d
+        # into z_e 1024d space.  This ensures both re_motion and re_text are
+        # in the same space (code_dim2d), matching SSTA's retrieval_dim.
+        # Use no_grad (not inference_mode) so outputs can still participate
+        # in downstream autograd (SSTA training) without projector gradients.
+        if self.query_projector is not None:
+            with torch.no_grad():
+                selected_texts = self.query_projector(selected_texts)  # (B*K, code_dim2d)
+
         all_motions_feature = selected_motions.view(b, k, 1, -1)  # (B, K, 1, code_dim2d)
-        all_texts_feature = selected_texts.view(b, k, 1, -1)      # (B, K, 1, 512)
+        all_texts_feature = selected_texts.view(b, k, 1, -1)      # (B, K, 1, D_text)
 
         re_dict = {
             're_motion': all_motions_feature,

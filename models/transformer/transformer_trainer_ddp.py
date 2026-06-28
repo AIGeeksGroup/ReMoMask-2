@@ -128,9 +128,22 @@ class MaskTransformerTrainer:
     def resume(self, model_dir):
         checkpoint = torch.load(model_dir, map_location=self.device)
         missing_keys, unexpected_keys = self.mask_transformer_aux.module.load_state_dict(checkpoint['mask_transformer_aux'], strict=False)
-        missing_keys, unexpected_keys = self.mask_transformer_ts.module.load_state_dict(checkpoint['mask_transformer_ts'], strict=False)
+        missing_keys_ts, unexpected_keys_ts = self.mask_transformer_ts.module.load_state_dict(checkpoint['mask_transformer_ts'], strict=False)
         assert len(unexpected_keys) == 0
-        assert all([k.startswith('clip_model.') for k in missing_keys])
+        assert len(unexpected_keys_ts) == 0
+        # V2: new SSTA retrieval projection layers won't exist in V1 checkpoint.
+        # Allow missing keys for clip_model.* and re_motion_proj.*/re_text_proj.*
+        def _is_allowed_missing(k):
+            return (k.startswith('clip_model.')
+                    or 're_motion_proj.' in k
+                    or 're_text_proj.' in k)
+        assert all([_is_allowed_missing(k) for k in missing_keys]), \
+            f"Unexpected missing keys in aux: {[k for k in missing_keys if not _is_allowed_missing(k)]}"
+        assert all([_is_allowed_missing(k) for k in missing_keys_ts]), \
+            f"Unexpected missing keys in ts: {[k for k in missing_keys_ts if not _is_allowed_missing(k)]}"
+        _new_keys = [k for k in missing_keys_ts if not k.startswith('clip_model.')]
+        if _new_keys:
+            print(f"[V2] Missing keys in ts (will init randomly): {_new_keys}")
 
         try:
             self.opt_mask_transformer_aux.load_state_dict(checkpoint['opt_mask_transformer_aux']) # Optimizer
