@@ -123,8 +123,10 @@ def plot_3d_motion_v2(motion, kinematic_tree, save_path, interval=50, dataset=No
     print(data.shape)
 
     def update(index):
-        ax.lines = []
-        ax.collections = []
+        while ax.lines:
+            ax.lines[0].remove()
+        while ax.collections:
+            ax.collections[0].remove()
         ax.view_init(elev=110, azim=-90)
         ax.scatter(motion[index, :, 0], motion[index, :, 1], motion[index, :, 2], color='black')
         for chain, color in zip(kinematic_tree, colors):
@@ -192,8 +194,10 @@ def plot_3d_motion_kit(save_path, kinematic_tree, joints, title, figsize=(5, 5),
 
     def update(index):
         #         print(index)
-        ax.lines = []
-        ax.collections = []
+        while ax.lines:
+            ax.lines[0].remove()
+        while ax.collections:
+            ax.collections[0].remove()
         ax.view_init(elev=110, azim=-90)
         ax.dist = 7.5
         #         ax =
@@ -250,8 +254,10 @@ def plot_3d_motion_gt_pred(save_path, kinematic_tree, gt_joints, pred_joints, ti
 
     def update(index):
         for i, ax in enumerate(axs):
-            ax.lines = []
-            ax.collections = []
+            while ax.lines:
+                ax.lines[0].remove()
+            while ax.collections:
+                ax.collections[0].remove()
             ax.view_init(elev=120, azim=-90)
             ax.dist = 7.5
 
@@ -335,7 +341,7 @@ def plot_3d_motion(save_path, kinematic_tree, joints, title, figsize=(10, 10), f
         ax.set_zlim3d([0, radius])
         # print(title)
         fig.suptitle(title, fontsize=20)
-        ax.grid(b=False)
+        ax.grid(visible=False)
 
     def plot_xzPlane(minx, maxx, miny, minz, maxz):
         ## Plot a plane XZ
@@ -354,7 +360,7 @@ def plot_3d_motion(save_path, kinematic_tree, joints, title, figsize=(10, 10), f
     # (seq_len, joints_num, 3)
     data = joints.copy().reshape(len(joints), -1, 3)
     fig = plt.figure(figsize=figsize)
-    ax = p3.Axes3D(fig)
+    ax = fig.add_subplot(111, projection='3d')
     init()
     MINS = data.min(axis=0).min(axis=0)
     MAXS = data.max(axis=0).max(axis=0)
@@ -375,10 +381,13 @@ def plot_3d_motion(save_path, kinematic_tree, joints, title, figsize=(10, 10), f
 
     def update(index):
         #         print(index)
-        ax.lines = []
-        ax.collections = []
+        while ax.lines:
+            ax.lines[0].remove()
+        while ax.collections:
+            ax.collections[0].remove()
         ax.view_init(elev=120, azim=-90)
-        ax.dist = 7.5
+        ax.set_box_aspect(None)
+        fig.subplots_adjust(left=0, right=1, bottom=0, top=0.9)
         #         ax =
         plot_xzPlane(MINS[0] - trajec[index, 0], MAXS[0] - trajec[index, 0], 0, MINS[2] - trajec[index, 1],
                      MAXS[2] - trajec[index, 1])
@@ -438,8 +447,10 @@ def plot_3d_motion_old(motion, pose_tree, class_type, save_path, interval=300, e
     print(data.shape)
 
     def update(index):
-        ax.lines = []
-        ax.collections = []
+        while ax.lines:
+            ax.lines[0].remove()
+        while ax.collections:
+            ax.collections[0].remove()
         if excluded_joints is None:
             ax.scatter(data[index, :, 0], data[index, :, 1], data[index, :, 2], color='b', marker='h', s=15)
         else:
@@ -517,8 +528,10 @@ def plot_3d_multi_motion(motion_list, kinematic_tree, save_path, interval=50, da
     # print(data.shape)
     print("Number of motions %d" % (len(motion_list)))
     def update(index):
-        ax.lines = []
-        ax.collections = []
+        while ax.lines:
+            ax.lines[0].remove()
+        while ax.collections:
+            ax.collections[0].remove()
         if dataset == "mocap":
             ax.view_init(elev=110, azim=-90)
         else:
