@@ -52,14 +52,14 @@
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| ABL-01 | Phase 1: Zero-Cost Ablations | Pending |
-| ABL-02 | Phase 1: Zero-Cost Ablations | Pending |
-| LA-01 | Phase 2: Latent-Aligned Retrieval | Pending |
-| LA-02 | Phase 2: Latent-Aligned Retrieval | Pending |
-| LA-03 | Phase 2: Latent-Aligned Retrieval | Pending |
-| LA-04 | Phase 2: Latent-Aligned Retrieval | Pending |
-| LA-05 | Phase 2: Latent-Aligned Retrieval | Pending |
-| LA-06 | Phase 2: Latent-Aligned Retrieval | Pending |
+| ABL-01 | Phase 1: Zero-Cost Ablations | Complete (signal unclear, FID -4%) |
+| ABL-02 | Phase 1: Zero-Cost Ablations | Complete (FID -13%, adopted rt_in_value=True) |
+| LA-01 | Phase 2: Latent-Aligned Retrieval | Complete (code_dim2d=1024 confirmed) |
+| LA-02 | Phase 2: Latent-Aligned Retrieval | Complete (database_ze/ built, 66912 samples) |
+| LA-03 | Phase 2: Latent-Aligned Retrieval | Complete (projector created, retraining on SLURM job 13739) |
+| LA-04 | Phase 2: Latent-Aligned Retrieval | Complete (retrieval_dim=1024 projection added) |
+| LA-05 | Phase 2: Latent-Aligned Retrieval | Complete (train/eval scripts integrated) |
+| LA-06 | Phase 2: Latent-Aligned Retrieval | Blocked (awaiting full training, SLURM job 13740) |
 | IR-01 | Phase 3: Iterative Dynamic Retrieval | Pending |
 | IR-02 | Phase 3: Iterative Dynamic Retrieval | Pending |
 | IR-03 | Phase 3: Iterative Dynamic Retrieval | Pending |

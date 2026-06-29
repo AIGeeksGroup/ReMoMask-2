@@ -11,7 +11,7 @@ ReMoMask V2 将检索增强动作生成（RAG-T2M）的检索空间从独立的 
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
-- [ ] **Phase 1: Zero-Cost Ablations** - V1 上验证 RAG-CFG schedule 和 SSTA Value 分支假设（~30 LOC）
+- [x] **Phase 1: Zero-Cost Ablations** - V1 上验证 RAG-CFG schedule 和 SSTA Value 分支假设（~30 LOC）
 - [ ] **Phase 2: Latent-Aligned Retrieval (Plan A)** - z_e 空间检索替换 Part_TMR，实现检索-生成空间统一（~200 LOC）
 - [ ] **Phase 3: Iterative Dynamic Retrieval (Plan B)** - 50% 时定点精检索 + 训练模拟（~150 LOC）
 - [ ] **Phase 4: Comprehensive Evaluation** - 2x2 消融矩阵 + 三数据集完整评估 + 结果归档
@@ -89,7 +89,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Zero-Cost Ablations | 0/TBD | Not started | - |
-| 2. Latent-Aligned Retrieval | 5/6 | In Progress|  |
+| 1. Zero-Cost Ablations | 0/TBD | Complete | 2026-06-28 |
+| 2. Latent-Aligned Retrieval | 5/6 | In Progress (Wave 1-3 done) |  |
 | 3. Iterative Dynamic Retrieval | 0/TBD | Not started | - |
 | 4. Comprehensive Evaluation | 0/TBD | Not started | - |
