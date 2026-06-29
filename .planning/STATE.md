@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 1
-current_phase_name: Zero-Cost Ablations
-status: planning
-stopped_at: Roadmap created, ready to plan Phase 1
-last_updated: "2026-06-28T01:16:02.087Z"
-last_activity: 2026-06-27
-last_activity_desc: Roadmap created
+current_phase: 2
+current_phase_name: Latent-Aligned Retrieval (Plan A)
+status: executing
+stopped_at: "Phase 2 Wave 3 complete. Wave 4 (ablation) blocked on full training. Remote server (diana.acfr.usyd.edu.au) configured and verified."
+last_updated: "2026-06-30"
+last_activity: 2026-06-30
+last_activity_desc: "Phase 2 Wave 3 training integration complete; remote server setup + demo verified"
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 7
   completed_plans: 5
-  percent: 0
+  percent: 71
 ---
 
 # Project State
@@ -24,53 +24,74 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-27)
 
 **Core value:** 检索空间与生成空间统一后 FID 必须优于 V1
-**Current focus:** Phase 1: Zero-Cost Ablations
+**Current focus:** Phase 2: Latent-Aligned Retrieval (Plan A)
 
 ## Current Position
 
-Phase: 1 of 4 (Zero-Cost Ablations)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-06-27 — Roadmap created
+Phase: 2 of 4 (Latent-Aligned Retrieval)
+Status: Wave 1-3 complete, Wave 4 blocked on full training
+Last activity: 2026-06-30 — Remote server setup + demo verified
 
 Progress: [███████░░░] 71%
 
-## Performance Metrics
+## Phase Status
 
-**Velocity:**
+| Phase | Status | Summary |
+|-------|--------|---------|
+| 1. Zero-Cost Ablations | **COMPLETE** | ABL-01 CFG schedule 信号模糊; ABL-02 R_t-in-Value FID -13% ← 采纳 |
+| 2. Latent-Aligned Retrieval | **IN PROGRESS** | Wave 1-3 done (z_e分析/数据库/projector/SSTA/训练脚本); Wave 4 待完整训练 |
+| 3. Iterative Dynamic Retrieval | Not started | 依赖 Phase 2 |
+| 4. Comprehensive Evaluation | Not started | 依赖 Phase 2+3 |
 
-- Total plans completed: 0
-- Average duration: -
-- Total execution time: 0 hours
+## Phase 1 Results
 
-**By Phase:**
+| Metric | Baseline | ABL-01 (CFG schedule) | ABL-02 (R_t in V) |
+|---|---|---|---|
+| FID ↓ | 0.102 | 0.098 (-4%) | **0.089 (-13%)** |
+| Top-1 ↑ | 0.478 | 0.476 | 0.479 |
 
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
+**Decision:** Phase 2 默认 rt_in_value=True
 
-## Accumulated Context
+## Phase 2 Progress
 
-### Decisions
+| Wave | Plans | Status |
+|------|-------|--------|
+| 1 | 02-01 z_e 几何验证 | ✓ code_dim2d=1024, cosine retrieval viable, 严重各向异性但不阻塞 |
+| 2 | 02-02 数据库重建 | ✓ database_ze/ 66912样本 1024d |
+| 2 | 02-03 Query Projector | ✓ 1.57M params, 初步训练完成(小数据集) |
+| 2 | 02-04 SSTA 适配 | ✓ retrieval_dim=1024 投影层 |
+| 3 | 02-05 训练集成 | ✓ train/eval 脚本支持 --use_ze_retrieval |
+| 4 | 02-06 消融对比 | **BLOCKED** — 需要完整训练 |
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
+## Key Decisions (accumulated)
 
-- 先跑零成本消融（RAG-CFG schedule + R_t K/V），验证前提假设后再进 Plan A
-- 操作 z_e（预量化连续 latent）而非 z_q（离散 token）
-- 冻结 VQ-VAE，仅训练 projector
+- z_e 预量化连续 latent（不是 z_q 离散 token）— 4/4 ideation agent 共识
+- code_dim2d = 1024（LA-01 验证）→ projector: Linear(512→1024)
+- 冻结 VQ-VAE + KL 对齐 + BMM teacher
+- rt_in_value=True（Phase 1 ABL-02 验证 FID -13%）
+- 远程训练环境：diana.acfr.usyd.edu.au SLURM 集群
 
-### Pending Todos
+## Remote Server
 
-None yet.
+- Host: diana.acfr.usyd.edu.au (USYD ACFR)
+- Code: ~/ReMoMask-2 (git synced with local)
+- Environment: conda remomask (Python 3.10 + PyTorch 2.1.0+cu118)
+- Data: checkpoints + database + HumanML3D 全部就位
+- Demo verified: persephone L40, MP4 生成成功
 
-### Blockers/Concerns
+## Next Steps
 
-- GPU 服务器待上线，Phase 1 消融需要远程训练环境
-- z_e 几何结构未知（Phase 2 的核心风险，Phase 1 不受影响）
+1. 用全量 BMM 数据库重训 query projector (sbatch persephone)
+2. V2 完整 MaskTransformer 训练 (2000 epochs)
+3. Phase 2 Wave 4 消融评估
+4. Phase 3 (Plan B iterative retrieval)
+
+## Blockers
+
+- 完整训练需要多小时 GPU 时间，需要 sbatch 提交长任务
 
 ## Session Continuity
 
-Last session: 2026-06-28T01:16:02.081Z
-Stopped at: Roadmap created, ready to plan Phase 1
-Resume file: None
+Last session: 2026-06-30
+Resume with: /gsd-execute-phase 2 --wave 4 (after training completes)
+Or: /gsd-progress (to see current state)
