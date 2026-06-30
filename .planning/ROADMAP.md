@@ -12,7 +12,7 @@ ReMoMask V2 将检索增强动作生成（RAG-T2M）的检索空间从独立的 
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 1: Zero-Cost Ablations** - V1 上验证 RAG-CFG schedule 和 SSTA Value 分支假设（~30 LOC）
-- [ ] **Phase 2: Latent-Aligned Retrieval (Plan A)** - z_e 空间检索替换 Part_TMR，实现检索-生成空间统一（~200 LOC）
+- [x] **Phase 2: Latent-Aligned Retrieval (Plan A)** - z_e 空间检索替换 Part_TMR，实现检索-生成空间统一（~200 LOC） (completed 2026-06-30)
 - [ ] **Phase 3: Iterative Dynamic Retrieval (Plan B)** - 50% 时定点精检索 + 训练模拟（~150 LOC）
 - [ ] **Phase 4: Comprehensive Evaluation** - 2x2 消融矩阵 + 三数据集完整评估 + 结果归档
 
@@ -45,7 +45,7 @@ ReMoMask V2 将检索增强动作生成（RAG-T2M）的检索空间从独立的 
   4. 端到端训练完成，HumanML3D 上 FID 不劣于 V1 基线（0.099 或更低）
   5. Plan A 消融（V1 Part_TMR 检索 vs V2 z_e 检索，其他不变）结果已产出
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans complete
 Plans:
 
 - [x] 02-01-PLAN.md — LA-01: z_e 几何分布验证（Wave 1）
@@ -53,7 +53,7 @@ Plans:
 - [x] 02-03-PLAN.md — LA-03: QueryProjector KL 对齐训练（Wave 2）
 - [x] 02-04-PLAN.md — LA-04: SSTA 维度适配（Wave 2）
 - [x] 02-05-PLAN.md — LA-05: 端到端训练（Wave 3）
-- [ ] 02-06-PLAN.md — LA-06: Plan A 消融对比（Wave 4）
+- [x] 02-06-PLAN.md — LA-06: Plan A 消融对比（Wave 4）
 
 **Estimated effort**: ~200 LOC, high complexity (z_e 几何未知、维度耦合风险)
 
@@ -90,6 +90,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Zero-Cost Ablations | 0/TBD | Complete | 2026-06-28 |
-| 2. Latent-Aligned Retrieval | 5/6 | In Progress (Wave 1-3 done) |  |
+| 2. Latent-Aligned Retrieval | 6/6 | Complete   | 2026-06-30 |
 | 3. Iterative Dynamic Retrieval | 0/TBD | Not started | - |
 | 4. Comprehensive Evaluation | 0/TBD | Not started | - |
