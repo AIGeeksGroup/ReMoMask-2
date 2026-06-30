@@ -61,7 +61,7 @@ Progress: [███████░░░] 71%
 | 2 | 02-03 Query Projector | ✓ 1.57M params, 初步训练完成(小数据集) |
 | 2 | 02-04 SSTA 适配 | ✓ retrieval_dim=1024 投影层 |
 | 3 | 02-05 训练集成 | ✓ train/eval 脚本支持 --use_ze_retrieval |
-| 4 | 02-06 消融对比 | **BLOCKED** — 需要完整训练 |
+| 4 | 02-06 消融对比 | ✓ 脚本已创建，SLURM 流水线已提交（13750-13754），等待训练完成 |
 
 ## Key Decisions (accumulated)
 
@@ -70,28 +70,40 @@ Progress: [███████░░░] 71%
 - 冻结 VQ-VAE + KL 对齐 + BMM teacher
 - rt_in_value=True（Phase 1 ABL-02 验证 FID -13%）
 - 远程训练环境：diana.acfr.usyd.edu.au SLURM 集群
+- V2 实验名：v2_ze_rtval，DDP 4×L40 训练
 
 ## Remote Server
 
 - Host: diana.acfr.usyd.edu.au (USYD ACFR)
 - Code: ~/ReMoMask-2 (git synced with local)
 - Environment: conda remomask (Python 3.10 + PyTorch 2.1.0+cu118)
-- Data: checkpoints + database + HumanML3D 全部就位
-- Demo verified: persephone L40, MP4 生成成功
+- Data: checkpoints + database + HumanML3D + database_ze 全部就位
+
+## SLURM Training Pipeline (2026-06-30 提交)
+
+| Job ID | 名称 | 预计时长 | 节点 | 状态 |
+|--------|------|---------|------|------|
+| 13750 | rebuild_bmm (重建 BMM teacher 全量数据库) | ~5 min | persephone | PENDING |
+| 13751 | proj_train (200 epochs KL 对齐) | ~2 h | persephone | afterok:13750 |
+| 13752 | v2_train (2000 epochs, 4×L40 DDP) | ~24-48 h | persephone | afterok:13751 |
+| 13753 | eval_v2 (20 repeats) | ~2-4 h | persephone | afterok:13752 |
+| 13754 | eval_v1 baseline (20 repeats) | ~2-4 h | persephone | afterok:13753 |
+
+修复的 bug：BMM 数据库只有 32 条（已重建）+ DDP os.makedirs 竞争条件（已修）
 
 ## Next Steps
 
-1. 用全量 BMM 数据库重训 query projector (sbatch persephone)
-2. V2 完整 MaskTransformer 训练 (2000 epochs)
-3. Phase 2 Wave 4 消融评估
+1. 等待 SLURM 流水线完成（~30-54 小时）
+2. 训练完成后运行 `python scripts/compare_v1_v2.py` 产出消融对比表
+3. Phase 2 验证：检查 FID ≤ 0.099
 4. Phase 3 (Plan B iterative retrieval)
 
 ## Blockers
 
-- 完整训练需要多小时 GPU 时间，需要 sbatch 提交长任务
+- 等待 SLURM 训练流水线（13750-13754）完成
 
 ## Session Continuity
 
 Last session: 2026-06-30
-Resume with: /gsd-execute-phase 2 --wave 4 (after training completes)
-Or: /gsd-progress (to see current state)
+Resume with: /gsd-progress (check SLURM status + phase state)
+Monitor: ssh diana.acfr.usyd.edu.au "squeue -u ywan0794"
