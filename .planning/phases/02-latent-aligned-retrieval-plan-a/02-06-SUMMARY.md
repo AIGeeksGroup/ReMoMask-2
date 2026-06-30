@@ -107,11 +107,24 @@ torchrun --nproc_per_node=4 \
 - **Files created:** scripts/slurm/job2_train_v2.sh
 - **Commit:** 6c02391
 
+**3. [Rule 1 - Bug] BMM teacher database only 32 samples**
+- **Found during:** Post-submission diagnostics
+- **Issue:** `database/` had only 32 samples (built with config_small), causing projector to truncate all data to 32 via `N = min(N, N_bmm)`. Projector R@1=3.1% (random), encoded_texts.npy only 32 entries vs 66912 needed
+- **Fix:** Added job0_rebuild_bmm.sh to rebuild BMM with full train.txt; original pipeline (13745-13749) cancelled and resubmitted as 13750-13754
+- **Commit:** 5b7b782 (DDP race fix), remote-only rebuild script
+
+**4. [Rule 1 - Bug] DDP os.makedirs race condition**
+- **Found during:** Post-submission diagnostics (v2_train crashed immediately)
+- **Issue:** `base_option.py` used `os.makedirs(expr_dir)` without `exist_ok=True`, causing FileExistsError when multiple DDP ranks race to create the directory
+- **Fix:** Changed to `os.makedirs(expr_dir, exist_ok=True)`
+- **Commit:** 5b7b782
+
 ## Verification Status
 
 **Deferred**: Ablation results cannot be verified until training completes (~30-54 hours). Current status:
-- Job 13745 (build_db_ze): RUNNING on persephone
-- Jobs 13746-13749: PENDING (dependency chain)
+- Pipeline resubmitted after fixing BMM database + DDP bugs
+- Job 13750 (rebuild_bmm): PENDING on persephone
+- Jobs 13751-13754: PENDING (dependency chain: projector → v2_train → eval_v2 → eval_v1)
 
 After pipeline completion, run:
 ```bash
