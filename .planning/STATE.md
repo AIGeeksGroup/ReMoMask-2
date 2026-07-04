@@ -70,40 +70,42 @@ Progress: [███████░░░] 71%
 - 冻结 VQ-VAE + KL 对齐 + BMM teacher
 - rt_in_value=True（Phase 1 ABL-02 验证 FID -13%）
 - 远程训练环境：diana.acfr.usyd.edu.au SLURM 集群
-- V2 实验名：v2_ze_rtval，DDP 4×L40 训练
+- V1/V2 对照训练：单卡 L40 × 2，配置与 V1 原版 opt.txt 完全一致 + 双方均开 rt_in_value，唯一变量 = 检索模块
+- rt_in_value 定位：独立 minor contribution（Phase 1 ABL-02，原始 V1 无此项），论文中作正交消融维度
 
 ## Remote Server
 
 - Host: diana.acfr.usyd.edu.au (USYD ACFR)
 - Code: ~/ReMoMask-2 (git synced with local)
 - Environment: conda remomask (Python 3.10 + PyTorch 2.1.0+cu118)
-- Data: checkpoints + database + HumanML3D + database_ze 全部就位
+- Data: checkpoints + database (全量重建 23384 条) + HumanML3D + database_ze 全部就位
 
-## SLURM Training Pipeline (2026-06-30 提交)
+## SLURM Training (2026-07-05 快照)
 
-| Job ID | 名称 | 预计时长 | 节点 | 状态 |
-|--------|------|---------|------|------|
-| 13750 | rebuild_bmm (重建 BMM teacher 全量数据库) | ~5 min | persephone | PENDING |
-| 13751 | proj_train (200 epochs KL 对齐) | ~2 h | persephone | afterok:13750 |
-| 13752 | v2_train (2000 epochs, 4×L40 DDP) | ~24-48 h | persephone | afterok:13751 |
-| 13753 | eval_v2 (20 repeats) | ~2-4 h | persephone | afterok:13752 |
-| 13754 | eval_v1 baseline (20 repeats) | ~2-4 h | persephone | afterok:13753 |
+| Job ID | 名称 | 进度 | 全局 best FID | 最优 ckpt |
+|--------|------|------|--------------|----------|
+| 13845 | v2_train (resume 自 13784@ep766) | ep ~1271/2000 | **0.0991 @ ep409** | net_best_fid_ep0409.tar |
+| 13846 | v1_retrain (resume 自 13791@ep762) | ep ~1268/2000 | 0.1273 @ ep316 | net_best_fid_ep0316.tar |
 
-修复的 bug：BMM 数据库只有 32 条（已重建）+ DDP os.makedirs 竞争条件（已修）
+- lr 恒定 2e-4，FID 已饱和 → 剩余 epoch 大概率不刷新 best，可考虑提前停
+- 看门狗 train_watchdog.sh 在登录节点自动重交（脚本未实战验证）
+- ⚠️ resume 后 net_best_fid.tar 被次优覆盖，正式评估显式用 ep0409/ep0316 文件
 
 ## Next Steps
 
-1. 等待 SLURM 流水线完成（~30-54 小时）
-2. 训练完成后运行 `python scripts/compare_v1_v2.py` 产出消融对比表
-3. Phase 2 验证：检查 FID ≤ 0.099
+1. 训练完成（或提前停）后：`eval_res.py` 完整 pipeline × 20 repeats × {V1@ep316, V2@ep409} → 论文数字
+2. rt_in_value 正交消融表：{Part_TMR, z_e} × {rtval on/off}，验证 ABL-02 的 −13% 是否复现
+3. `compare_v1_v2.py` 出 comparison.json/tex + Phase 2 正式验证
 4. Phase 3 (Plan B iterative retrieval)
+5. 论文：先读透 ECCV 原文（LaTeX 工程 `_TPAMI_2026__ReMoMask_2/`）再动笔
 
 ## Blockers
 
-- 等待 SLURM 训练流水线（13750-13754）完成
+- 等待 V1/V2 训练（13845/13846）完成或做提前停决策
 
 ## Session Continuity
 
-Last session: 2026-06-30
-Resume with: /gsd-progress (check SLURM status + phase state)
-Monitor: ssh diana.acfr.usyd.edu.au "squeue -u ywan0794"
+Last session: 2026-07-05
+**完整 handoff 见: .planning/phases/02-latent-aligned-retrieval-plan-a/.continue-here.md**
+Resume with: /gsd-progress
+Monitor: ssh diana.acfr.usyd.edu.au "sacct -j 13845,13846 --format=JobID,JobName%18,State%12,Elapsed -n"
