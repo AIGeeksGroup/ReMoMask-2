@@ -72,3 +72,6 @@ hf_data/
 hf_download/
 __pycache__/
 *.pyc
+
+# main README must be tracked (negate case-insensitive Readme.md above)
+!README.md
