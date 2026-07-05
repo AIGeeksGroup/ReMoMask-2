@@ -1,0 +1,1327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 02 — 双分支 RVQ-VAE | ReMoMask 内部课程</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<!-- ===== 课程导航 ===== -->
+<nav class="course-nav">
+  <a href="0001-overview.html">第 1 课: 系统总览</a>
+  <span class="nav-current">第 2 课: 双分支 RVQ-VAE</span>
+  <a href="0003-mask-transformer.html">第 3 课: Mask Transformer</a>
+  <a href="0004-text-conditioning.html">第 4 课: 文本条件</a>
+  <a href="0005-training-pipeline.html">第 5 课: 训练流程</a>
+  <a href="0006-inference-sampling.html">第 6 课: 推理与采样</a>
+  <a href="0007-evaluation.html">第 7 课: 评估与指标</a>
+  <a href="glossary.html">术语表</a>
+  <a href="cheatsheet.html">速查表</a>
+</nav>
+
+<header>
+  <h1>Lesson 02 &mdash; 双分支 RVQ-VAE：运动 token 化的核心引擎</h1>
+  <p class="subtitle">
+    从 263 维连续运动到离散 token 序列 &mdash; 1D 全局分支与 2D 关节分支的协同设计
+  </p>
+</header>
+
+<main>
+
+<!-- ============================================================ -->
+<section id="motion-repr">
+<h2>1. HumanML3D 263 维运动表示的拆解</h2>
+
+<p>
+ReMoMask 的输入是 HumanML3D 格式的标准化运动序列，每帧 263 维。
+数据集在加载时按如下方式对 <code>std</code> 做了分段 bias 缩放，显式标出了各段的语义边界：
+</p>
+
+<div class="diagram">
+<pre>
+263 维 = 4 + 63 + 126 + 66 + 4  <span class="verified">已验证</span>
+
+ 索引范围             维数      语义                   来源
+ ──────────────────────────────────────────────────────────────
+ [0 : 4)              4       根关节特征               root_rot_velocity (1)
+                                                      root_linear_velocity (2)
+                                                      root_y (1)
+ [4 : 67)            63       关节位置 ric_data        (J-1) x 3 = 21 x 3
+ [67 : 193)         126       关节旋转 rot_data        (J-1) x 6 = 21 x 6
+ [193 : 259)         66       关节速度 local_velocity   J x 3 = 22 x 3
+ [259 : 263)          4       脚部接触 foot_contact     left_heel / left_toe
+                                                      right_heel / right_toe
+ ──────────────────────────────────────────────────────────────
+ 总计                263       J = 22 (HumanML3D)
+                                                      <span class="verified">已验证</span>
+</pre>
+</div>
+
+<p class="file-ref">
+验证：<code>data/t2m_dataset.py:44-64</code> &mdash; <code>MotionDataset.__init__</code> 中的
+<code>std</code> 分段处理与 <code>assert 4+(joints_num-1)*9+joints_num*3+4 == mean.shape[-1]</code>
+精确锁定了 263 = 4 + 21&times;9 + 22&times;3 + 4。
+<span class="verified">已验证</span>
+</p>
+
+<div class="key-concept">
+<h3>设计决策：根关节与非根关节的不对称性</h3>
+<p>
+位置和旋转只覆盖 21 个<em>非根</em>关节（索引 1-21），不含根关节（索引 0）。
+根关节的全局位移用 4 维参数化（旋转速度 + 平面速度 + 高度），避免了绝对坐标带来的
+分布偏移问题。而速度场覆盖全部 22 个关节（含根关节），脚部接触则只有 4 维二值信号。
+这种不对称直接影响了后续 2D 分支中 <code>x_joints</code> 的构建方式。
+</p>
+</div>
+
+<h3>1.1 数据集如何构建 2D 分支的输入 <code>x_joints</code></h3>
+
+<p>
+<code>MotionDataset.__getitem__</code> 将 263 维平坦向量重组为
+<span class="tensor">[T, 22, 12]</span> 的关节张量：
+<span class="verified">已验证</span>
+</p>
+
+<div class="diagram">
+<pre>
+x_joints 的 12 维特征布局（每个关节）  <span class="verified">已验证</span>
+
+  特征索引    维数    来源                  根关节(j=0)    非根关节(j=1..21)
+  ─────────────────────────────────────────────────────────────────────
+  [0 : 3)      3    position (ric_data)     全零            x_pos
+  [3 : 9)      6    rotation (rot_data)     全零            x_rot
+  [9 : 12)     3    velocity                x_speed[0]      x_speed[j]
+  ─────────────────────────────────────────────────────────────────────
+</pre>
+</div>
+
+<p class="file-ref">
+<code>data/t2m_dataset.py:98-110</code> &mdash; 注意被注释掉的
+<code>x_joints[:, 0, :8] = x_root</code>（line 113）说明曾经尝试将根特征和脚部接触
+填入根关节的前 8 维，但最终放弃了。这是一个有意的设计选择：让 2D 分支只关注
+关节级的空间结构，全局特征交给 1D 分支负责。
+<span class="verified">已验证</span>
+</p>
+
+<div class="key-concept">
+<h3>补充：被注释掉的第二行（line 114）</h3>
+<p>
+除了 line 113 外，<code>t2m_dataset.py:114</code> 还有一行被注释掉的代码：
+<code># x_joints[:, :, -8:] = x_root[:, None, :].repeat(n_j, axis=1)</code>，
+尝试将根特征广播到<em>所有</em>关节的最后 8 维。这说明作者曾考虑过多种根特征注入方案
+（仅根关节 vs 广播到全部关节），最终都放弃了，选择让 2D 分支完全不接触全局特征。
+</p>
+</div>
+
+</section>
+
+<!-- ============================================================ -->
+<section id="skeleton">
+<h2>1.2 HumanML3D 22 关节骨骼拓扑</h2>
+
+<p>
+运动学链定义在 <code>utils/paramUtil.py:27</code>：
+<span class="verified">已验证</span>
+</p>
+
+<div class="diagram">
+<pre>
+HumanML3D 22-joint 骨骼（索引 0-21）  <span class="verified">已验证</span>
+
+                        [15] upper head
+                         |
+                        [12] head
+                         |
+              [13]------[9] neck------[14]
+             L-collar    |           R-collar
+               |        [6] chest        |
+              [16]       |              [17]
+             L-elbow    [3] spine      R-elbow
+               |         |               |
+              [18]      [0] pelvis      [19]
+             L-wrist   /     \         R-wrist
+               |     [1]     [2]         |
+              [20]  L-hip   R-hip      [21]
+             L-hand   |       |       R-hand
+                     [4]     [5]
+                    L-knee  R-knee
+                      |       |
+                     [7]     [8]
+                    L-ankle R-ankle
+                      |       |
+                    [10]    [11]
+                    L-foot  R-foot
+
+运动学链分组:
+  左腿:  0 &rarr; 1 &rarr; 4 &rarr; 7 &rarr; 10
+  右腿:  0 &rarr; 2 &rarr; 5 &rarr; 8 &rarr; 11
+  脊柱:  0 &rarr; 3 &rarr; 6 &rarr; 9 &rarr; 12 &rarr; 15
+  左臂:  9 &rarr; 13 &rarr; 16 &rarr; 18 &rarr; 20
+  右臂:  9 &rarr; 14 &rarr; 17 &rarr; 19 &rarr; 21
+</pre>
+</div>
+
+<p>
+注意关节在索引空间的排列：左右肢体是<em>交错</em>的（L-hip=1, R-hip=2, spine=3, L-knee=4, R-knee=5...），
+而非按肢体分组。这对 2D 分支的 Conv2d 感受野很重要 &mdash; 相邻索引的关节往往属于不同肢体。
+</p>
+
+</section>
+
+<!-- ============================================================ -->
+<section id="branch-1d">
+<h2>2. 1D 分支：Conv1d 全局编码器</h2>
+
+<p>
+1D 分支接收完整的 263 维运动序列，用纯时序卷积编码全局运动模式。
+</p>
+
+<h3>2.1 Encoder1d 结构</h3>
+
+<p class="file-ref"><code>models/vq/encdec.py:5-34</code> &mdash; <code>Encoder</code> 类
+<span class="verified">已验证</span></p>
+
+<div class="diagram">
+<pre>
+Encoder1d 数据流（默认参数 down_t=2, stride_t=2, width=512, depth=3, dgr=3）
+
+  输入: [B, 263, T]       ── T=196（window_size=64 时 T=64，下面以 T=196 举例）
+
+  Conv1d(263, 512, k=3, s=1, p=1)      [B, 512, T]        初始投影
+  ReLU                                  [B, 512, T]
+
+  ┌─ 下采样阶段 1 ───────────────────────────────────────
+  │  Conv1d(512, 512, k=4, s=2, p=1)   [B, 512, T/2]     时序 2x 下采样
+  │  Resnet1D(512, depth=3, dgr=3)     [B, 512, T/2]     3 个 ResConv1DBlock
+  └───────────────────────────────────────────────────────
+
+  ┌─ 下采样阶段 2 ───────────────────────────────────────
+  │  Conv1d(512, 512, k=4, s=2, p=1)   [B, 512, T/4]     时序 2x 下采样
+  │  Resnet1D(512, depth=3, dgr=3)     [B, 512, T/4]     3 个 ResConv1DBlock
+  └───────────────────────────────────────────────────────
+
+  Conv1d(512, code_dim1d, k=3, s=1, p=1) [B, 512, T/4]   输出投影
+
+  总时序下采样倍率: 2^down_t = 4x
+  196 帧 &rarr; 49 token          64 帧 &rarr; 16 token
+
+  <span class="verified">已验证</span>
+</pre>
+</div>
+
+<p class="file-ref">
+下采样卷积参数计算见 <code>encdec.py:19</code>：
+<code>filter_t, pad_t = stride_t * 2, stride_t // 2</code> &rarr; kernel=4, padding=1。
+<span class="verified">已验证</span>
+</p>
+
+<div class="key-concept">
+<h3>注意：Encoder 与 Decoder 的 reverse_dilation 传参不对称</h3>
+<p>
+Encoder 在构造 <code>Resnet1D</code> 时<em>不</em>显式传 <code>reverse_dilation</code>
+参数，依赖构造器默认值 <code>True</code>；
+而 Decoder 显式传了 <code>reverse_dilation=True</code>。
+两者行为一致（都是 [9,3,1] 顺序），但耦合方式不同 &mdash;
+如果未来修改了 <code>Resnet1D</code> 的默认值，只有 Encoder 会受影响。
+</p>
+</div>
+
+<h3>2.2 ResConv1DBlock 细节</h3>
+
+<p class="file-ref"><code>models/vq/resnet.py:12-69</code>
+<span class="verified">已验证</span></p>
+
+<div class="diagram">
+<pre>
+ResConv1DBlock(n_in=512, dilation=d)  <span class="verified">已验证</span>
+
+  x_orig = x
+  x = Norm(x)                    ── 默认 nn.Identity()（norm=None）
+  x = Activation(x)              ── 默认 ReLU
+  x = Conv1d(512, 512, k=3, s=1, p=d, dilation=d)    扩张卷积
+  x = Norm(x)
+  x = Activation(x)
+  x = Conv1d(512, 512, k=1, s=1, p=0)                1x1 逐点卷积
+  x = Dropout(0.2)(x)
+  x = x + x_orig                                      残差连接
+</pre>
+</div>
+
+<div class="key-concept">
+<h3>设计决策：指数扩张卷积 + 逆序</h3>
+<p>
+<code>Resnet1D</code> 在 <code>depth=3</code> 层中使用指数增长的 dilation：
+<code>dilation_growth_rate^i</code> = [1, 3, 9]。
+因为 <code>reverse_dilation</code> 默认为 <code>True</code>
+（<code>resnet.py:73</code> 的构造器默认参数），
+实际执行顺序是 <strong>[9, 3, 1]</strong> &mdash; 先用大 dilation 捕捉长程依赖，
+再用小 dilation 精修局部细节。
+<span class="verified">已验证</span>
+</p>
+<p>
+dilation=9 的 3&times;1 卷积有效感受野为 19 帧（1 + 2&times;9 = 19，约 1 秒 @20fps），
+在 49 个 token 的序列上已能覆盖 ~40% 的时间跨度。
+<span class="verified">已验证</span>
+</p>
+</div>
+
+<h3>2.3 Decoder1d 结构</h3>
+
+<p class="file-ref"><code>models/vq/encdec.py:70-101</code>
+<span class="verified">已验证</span></p>
+
+<div class="diagram">
+<pre>
+Decoder1d 数据流  <span class="verified">已验证</span>
+
+  输入: [B, 512, T/4]
+
+  Conv1d(512, 512, k=3, s=1, p=1)   [B, 512, T/4]
+  ReLU
+
+  ┌─ 上采样阶段 1 ──────────────────────────────────────
+  │  Resnet1D(512, depth=3, dgr=3, reverse_dilation=True)
+  │  Upsample(scale_factor=2, mode='nearest')   [B, 512, T/2]
+  │  Conv1d(512, 512, k=3, s=1, p=1)
+  └──────────────────────────────────────────────────────
+
+  ┌─ 上采样阶段 2 ──────────────────────────────────────
+  │  Resnet1D(...)
+  │  Upsample(scale_factor=2, mode='nearest')   [B, 512, T]
+  │  Conv1d(512, 512, k=3, s=1, p=1)
+  └──────────────────────────────────────────────────────
+
+  Conv1d(512, 512, k=3, s=1, p=1) + ReLU
+  Conv1d(512, 263, k=3, s=1, p=1)
+
+  permute(0, 2, 1)  &rarr;  [B, T, 263]
+</pre>
+</div>
+
+<p>
+Decoder 的上采样用 nearest interpolation + Conv1d 而非转置卷积，
+避免了 checkerboard artifact。ResNet block 放在上采样<em>之前</em>，
+在低分辨率空间做特征精修，计算效率更高。
+<span class="verified">已验证</span>
+</p>
+
+</section>
+
+<!-- ============================================================ -->
+<section id="branch-2d">
+<h2>3. 2D 分支的核心创新：关节级 token 化</h2>
+
+<p>
+2D 分支是 ReMoMask 相对于 T2M-GPT / MMM 等前作的关键创新。
+它将运动视为 (时间 &times; 关节) 的 2D 网格，
+用 Conv2d 在时间和关节两个维度同时下采样，
+让每个 token 同时编码一段时间和一组关节的运动模式。
+</p>
+
+<h3>3.1 22 关节 &rarr; pad 到 24 &rarr; 下采样到 6 组</h3>
+
+<p class="file-ref"><code>models/vq/model.py:88-89,110-111</code>
+<span class="verified">已验证</span></p>
+
+<div class="diagram">
+<pre>
+2D 分支输入处理
+
+  x2d 原始形状: [B, T, 22, 12]      ── 来自数据集的 x_joints
+
+  Pad(0,0,1,1):                      在关节维度两侧各补 1 个零关节
+  [B, T, 24, 12]
+
+  rearrange('b t j d -> b d t j'):   转为 Conv2d 格式
+  [B, 12, T, 24]                     12 通道 = 每关节特征维度
+                                     T &times; 24 = 时空 2D 网格
+
+  <span class="verified">已验证</span>
+</pre>
+</div>
+
+<div class="key-concept">
+<h3>设计决策：为什么 pad 到 24？</h3>
+<p>
+22 不是 4 的倍数（2 次 stride=2 下采样需要被 4 整除），
+所以在关节维度补齐到 24 = 6 &times; 4。对 KIT 数据集（21 关节）则
+<code>pad(0,0,1,2)</code>（补到 24）。补零不引入假信号，
+仅保证卷积的空间对齐。
+<span class="verified">已验证</span>
+</p>
+</div>
+
+<h3>3.2 Encoder2d 结构</h3>
+
+<p class="file-ref"><code>models/vq/encdec.py:37-67</code>
+<span class="verified">已验证</span></p>
+
+<div class="diagram">
+<pre>
+Encoder2d 数据流  <span class="verified">已验证</span>
+
+  输入: [B, 12, T, 24]         ── 12 通道, T&times;24 空间
+
+  Conv2d(12, 512, k=3, s=1, p=1)     [B, 512, T, 24]       初始投影
+  ReLU
+
+  ┌─ 下采样阶段 1 ──────────────────────────────────────────────
+  │  Conv2d(512, 512, k=4, s=2, p=1)  [B, 512, T/2, 12]    时空同步 2x 下采样
+  │  Resnet2D(512, depth=3, dgr=3)    [B, 512, T/2, 12]
+  └──────────────────────────────────────────────────────────────
+
+  ┌─ 下采样阶段 2 ──────────────────────────────────────────────
+  │  Conv2d(512, 512, k=4, s=2, p=1)  [B, 512, T/4, 6]     时空同步 2x 下采样
+  │  Resnet2D(512, depth=3, dgr=3)    [B, 512, T/4, 6]
+  └──────────────────────────────────────────────────────────────
+
+  Conv2d(512, code_dim2d, k=3, s=1, p=1) [B, 512, T/4, 6]  输出投影
+
+  时序下采样: 4x (196 &rarr; 49)
+  关节下采样: 4x (24 &rarr; 6)
+</pre>
+</div>
+
+<h3>3.3 六个关节组的感受野映射</h3>
+
+<p>
+2 次 stride=2 的 Conv2d 在关节维度将 24 个位置压缩为 6 个。
+每个输出位置的<em>直接</em>感受野约覆盖 7-8 个相邻关节索引
+（计入 ResNet2D 的扩张卷积后实际感受野更大）。
+按 HumanML3D 的关节索引排列，6 个组大致对应：
+</p>
+
+<div class="diagram">
+<pre>
+关节组感受野映射（含 padding，近似覆盖范围）
+
+  组 0:  pad, j0(pelvis), j1(L-hip), j2(R-hip), j3(spine)
+         &rarr; 躯干中心 + 髋部
+
+  组 1:  j2(R-hip) ~ j7(chest), j4(L-knee), j5(R-knee)
+         &rarr; 双腿上段 + 脊柱
+
+  组 2:  j5(R-knee) ~ j11(R-foot), j8(R-ankle), j9(neck)
+         &rarr; 双腿下段 + 颈部
+
+  组 3:  j9(neck) ~ j14(R-collar), j12(head), j13(L-collar)
+         &rarr; 头颈 + 肩部
+
+  组 4:  j13(L-collar) ~ j19(R-wrist), j16(L-elbow), j17(R-elbow)
+         &rarr; 双臂
+
+  组 5:  j17(R-elbow) ~ j21(R-hand), j20(L-hand), pad
+         &rarr; 前臂 + 手部
+
+  注: 这不是精确的分区划分，Conv2d 的感受野有大量重叠，
+  且 Resnet2D 的扩张卷积 (dilation 9) 能跨越几乎所有组。
+  分组是网络自动学到的，不是硬编码。
+</pre>
+</div>
+
+<div class="key-concept">
+<h3>设计决策：Conv2d 而非手动关节分组</h3>
+<p>
+与 T2M-GPT 等将所有关节特征拍平为 1D 序列不同，
+2D 分支保留了关节的空间维度。Conv2d 的归纳偏置天然鼓励
+相邻关节共享特征，而 Resnet2D 的扩张卷积让远距关节也能交互。
+这比手动定义关节组更灵活 &mdash; 网络可以学到超越解剖学先验的分组。
+</p>
+<p>
+不过，由于 HumanML3D 的关节索引是左右交错排列的
+（L-hip=1, R-hip=2, L-knee=4, R-knee=5），
+Conv2d 的局部感受野会自然地在同一组内混合左右肢体，
+这对双侧协调运动（走路、跑步）是有利的。
+</p>
+</div>
+
+<h3>3.4 每个关节组独立 RVQ 量化</h3>
+
+<p class="file-ref"><code>models/vq/model.py:118</code>
+<span class="verified">已验证</span></p>
+
+<pre><code>x2d_quantized, code_idx2d, commit_loss2d, perplexity2d = self.quantizer2d(
+    rearrange(x2d_encode, 'b d t j -> (b j) d t'),      # [B*6, 512, T/4]
+    sample_codebook_temp=0.5
+)</code></pre>
+
+<p>
+关键操作是 <code>rearrange('b d t j -> (b j) d t')</code>：
+将 6 个关节组沿 batch 维度展开。对于 <code>quantizer2d</code> 来说，
+它看到的是 <span class="tensor">[B&times;6, 512, T/4]</span> 的 1D 序列 &mdash;
+每个关节组被当作独立样本进行 RVQ 量化。
+<span class="verified">已验证</span>
+</p>
+
+<div class="key-concept">
+<h3>设计决策：共享码本 vs 独立码本</h3>
+<p>
+6 个关节组共享同一个 <code>quantizer2d</code>（同一套码本），
+而非每组各有一个量化器。共享码本是一种正则化手段：
+不同身体部位被迫使用同一套运动"词汇"，这鼓励码本学到更通用的运动原语
+（比如"摆动"、"弯曲"这种跨部位通用的模式）。
+同时也大幅减少参数量：3 层 RVQ &times; 512 码字已足够，
+不需要 6 &times; 3 &times; 512 个码字。
+<span class="verified">已验证</span>
+</p>
+</div>
+
+<p>
+量化后的码本索引重组过程：
+</p>
+
+<pre><code># quantizer 输出: code_idx2d 形状 [B*6, T/4, num_quantizers]
+# 在 encode() 中重组:
+code_idx2d = code_idx2d.reshape(B, self.J, T, n_qt).permute(0, 2, 1, 3)
+# &rarr; [B, T/4, 6, num_quantizers]</code></pre>
+
+<p class="file-ref"><code>models/vq/model.py:94-96</code> &mdash;
+最终每个时间步、每个关节组有 <code>num_quantizers</code>（默认 3）个码本索引。
+<span class="verified">已验证</span>
+</p>
+
+<div class="key-concept">
+<h3>补充：encode() 与 forward() 的量化温度差异</h3>
+<p>
+<code>forward()</code> 训练时调用 quantizer 传入 <code>sample_codebook_temp=0.5</code>
+（Gumbel 采样，见第 4.3 节），而 <code>encode()</code> 调用 <code>quantizer.quantize()</code>
+时 temperature 默认为 0 &mdash; 退化为纯最近邻选择，不使用 Gumbel 采样。
+这是一个关键的训练/推理行为差异：训练时用随机性促进码本探索，
+推理编码时用确定性保证可复现。
+</p>
+</div>
+
+</section>
+
+<!-- ============================================================ -->
+<section id="rvq">
+<h2>4. Residual VQ：多层码本的实现细节</h2>
+
+<p class="file-ref"><code>models/vq/residual_vq.py:28-169</code></p>
+
+<p>
+RVQ 遵循 SoundStream (Zeghidour et al., 2021) 的 Algorithm 1：
+多层量化器逐层编码残差，每层只需捕捉上一层未能表达的信息。
+</p>
+
+<h3>4.1 前向传播流程</h3>
+
+<div class="diagram">
+<pre>
+ResidualVQ forward（num_quantizers=3 为例）  <span class="verified">已验证</span>
+
+  输入: x                    [B, 512, T]   ── encoder 输出
+  residual = x
+  quantized_out = 0
+
+  ┌─ Layer 0 ──────────────────────────────────────────────
+  │  q_0, idx_0, loss_0 = QuantizeEMAReset(residual)
+  │  residual = residual - q_0.detach()        只截断梯度, 不影响 residual 值
+  │  quantized_out += q_0
+  └────────────────────────────────────────────────────────
+
+  ┌─ Layer 1 ──────────────────────────────────────────────
+  │  q_1, idx_1, loss_1 = QuantizeEMAReset(residual)       编码 Layer 0 的残差
+  │  residual = residual - q_1.detach()
+  │  quantized_out += q_1
+  └────────────────────────────────────────────────────────
+
+  ┌─ Layer 2 ──────────────────────────────────────────────
+  │  q_2, idx_2, loss_2 = QuantizeEMAReset(residual)       编码 Layer 0+1 的残差
+  │  residual = residual - q_2.detach()
+  │  quantized_out += q_2
+  └────────────────────────────────────────────────────────
+
+  输出:
+    quantized_out = q_0 + q_1 + q_2              累加量化结果
+    all_indices = stack([idx_0, idx_1, idx_2])    [B, T, 3]
+    all_losses = mean(loss_0, loss_1, loss_2)     commitment loss 取平均
+    all_perplexity = mean(perp_0, perp_1, perp_2)
+</pre>
+</div>
+
+<p class="file-ref">
+残差计算的 <code>.detach()</code> 在 <code>residual_vq.py:146</code>：
+梯度不通过残差路径反传到前面的量化器，每层量化器独立优化。
+<span class="verified">已验证</span>
+</p>
+
+<h3>4.2 Quantize Dropout</h3>
+
+<p class="file-ref"><code>models/vq/residual_vq.py:112-127</code>
+<span class="verified">已验证</span></p>
+
+<div class="key-concept">
+<h3>设计决策：随机丢弃后面的量化层</h3>
+<p>
+训练时以概率 <code>quantize_dropout_prob</code>（默认 0.2，来自 argparse）触发 dropout。
+触发后，从 <code>[cutoff_index, num_quantizers)</code> 中均匀采样一个截断点
+<code>start_drop_quantize_index</code>，索引<em>大于</em>截断点的所有层跳过
+（截断点所在的层本身仍正常执行），码本索引填 -1。
+<span class="verified">已验证</span>
+</p>
+<p>
+这迫使前面的层尽量独立地编码足够的信息，不依赖后续层的残差补偿。
+好处是推理时可以用更少的码本层（牺牲少量质量换取更短的 token 序列），
+也让第一层码本的语义更集中、更适合 mask transformer 建模。
+</p>
+</div>
+
+<pre><code># residual_vq.py:112-117
+should_quantize_dropout = self.training and random.random() < self.quantize_dropout_prob
+
+if should_quantize_dropout:
+    start_drop_quantize_index = randrange(self.quantize_dropout_cutoff_index, num_quant)
+    null_indices = torch.full(null_indices_shape, -1., device=device, dtype=torch.long)</code></pre>
+
+<div class="key-concept">
+<h3>补充：Quantize Dropout 的边界行为</h3>
+<p>
+默认 <code>num_quantizers=3</code>、<code>cutoff_index=0</code> 时，
+<code>randrange(0, 3)</code> 可以返回 0、1 或 2。由于跳过条件是
+<code>quantizer_index &gt; start_drop_quantize_index</code>（严格大于），
+当 <code>start_drop_quantize_index=2</code> 时，所有三层（0、1、2）都不满足
+<code>&gt; 2</code>，实际不丢弃任何层。
+因此"20% 概率触发 dropout"并不等于"20% 的训练步真的少跑层" &mdash;
+有约 1/3 的触发情况实际上等于不丢弃。
+</p>
+</div>
+
+<div class="key-concept">
+<h3>补充：force_dropout_index 参数</h3>
+<p>
+<code>ResidualVQ.forward()</code> 还接受一个 <code>force_dropout_index</code>
+参数（<code>residual_vq.py:122-126</code>），可以在推理时强制截断 RVQ 层数。
+传入后会覆盖随机采样的截断点，让指定索引之后的层全部跳过。
+这在测试不同码本层数对重建质量的影响时很有用。
+</p>
+</div>
+
+<div class="key-concept">
+<h3>补充：构造器默认值与 argparse 默认值的差异</h3>
+<p>
+<code>ResidualVQ.__init__</code> 的 <code>quantize_dropout_prob</code>
+构造器默认值是 0.5（<code>residual_vq.py:34</code>），
+但 argparse 默认值是 0.2（<code>vq_option.py</code>）。
+类似地，<code>RVQVAE.__init__</code> 的 <code>down_t</code>
+构造器默认值是 3（<code>models/vq/model.py:14</code>），
+但 argparse 默认值是 2。
+实际训练始终通过命令行参数传入，因此用的是 argparse 的值。
+读代码时注意区分这两层默认值，避免混淆。
+</p>
+</div>
+
+<h3>4.3 单层量化器：QuantizeEMAReset</h3>
+
+<p class="file-ref"><code>models/vq/quantizer.py:35-158</code>
+<span class="verified">已验证</span></p>
+
+<h4>码字选择：Gumbel 采样</h4>
+
+<p class="file-ref"><code>quantizer.py:67-80</code>
+<span class="verified">已验证</span></p>
+
+<pre><code>def quantize(self, x, sample_codebook_temp=0.):
+    distance = ||x||^2 - 2 * x @ codebook^T + ||codebook||^2    # [N*T, nb_code]
+    code_idx = gumbel_sample(-distance, temperature=sample_codebook_temp,
+                             stochastic=True, training=self.training)</code></pre>
+
+<p>
+训练时（<code>sample_codebook_temp=0.5</code>，见 <code>models/vq/model.py:105</code>），
+在负距离上叠加 Gumbel 噪声再取 argmax，等价于按 softmax 概率采样。
+这比硬 nearest neighbor 更利于码本探索，减少 codebook collapse。
+推理时 temperature=0，退化为标准最近邻。
+<span class="verified">已验证</span>
+</p>
+
+<h4>EMA 码本更新 + 死码重置</h4>
+
+<p class="file-ref"><code>quantizer.py:100-117</code>
+<span class="verified">已验证</span></p>
+
+<div class="diagram">
+<pre>
+EMA 更新（mu=0.99）  <span class="verified">已验证</span>
+
+  每次前向传播后:
+  1. 统计每个码字被选中的次数 code_count 和对应 encoder 输出的加权和 code_sum
+  2. EMA 更新:
+       code_sum  &larr; 0.99 * code_sum  + 0.01 * batch_code_sum
+       code_count &larr; 0.99 * code_count + 0.01 * batch_code_count
+  3. 更新码本:
+       codebook = code_sum / code_count    （对活跃码字）
+  4. 死码重置:
+       if code_count &lt; 1.0:
+           codebook[dead] = random_training_sample + noise
+</pre>
+</div>
+
+<div class="key-concept">
+<h3>设计决策：Reset 而非 Restart</h3>
+<p>
+<code>QuantizeEMAReset</code> 检测使用率低于 1.0 的码字，
+将其替换为当前 batch 中随机挑选的 encoder 输出（<code>_tile</code> 方法，
+<code>quantizer.py:49-58</code>）加微小噪声。这和 QuantizeEMA
+（<code>quantizer.py:160-180</code>）的区别在于后者不做重置，
+死码会永久保留旧值。Reset 策略对抗 codebook collapse 更激进。
+<span class="verified">已验证</span>
+</p>
+</div>
+
+<h4>Commitment Loss 与 Straight-Through Estimator</h4>
+
+<p class="file-ref"><code>quantizer.py:147-150</code>
+<span class="verified">已验证</span></p>
+
+<pre><code># Commitment loss: 让 encoder 输出靠近码字
+commit_loss = F.mse_loss(x, x_d.detach())
+
+# Straight-through estimator: 前向用量化结果，反向传梯度给 encoder
+x_d = x + (x_d - x).detach()</code></pre>
+
+<p>
+<code>x_d - x</code> 被 detach 后加回 <code>x</code>，
+前向值等于 <code>x_d</code>（量化后码字），但梯度直接穿过到 <code>x</code>。
+这是 VQ-VAE 的标准 trick，让不可微的 argmin 操作可以训练。
+<span class="verified">已验证</span>
+</p>
+
+<h4>Perplexity 计算</h4>
+
+<p class="file-ref"><code>quantizer.py:89-98</code>
+<span class="verified">已验证</span></p>
+
+<pre><code>prob = code_count / sum(code_count)
+perplexity = exp(-sum(prob * log(prob)))</code></pre>
+
+<p>
+Perplexity 衡量码本利用率：若 512 个码字被均匀使用，
+perplexity 接近 512；若只有少数码字活跃，perplexity 远低于 512。
+训练中监控 perplexity 是诊断 codebook collapse 的关键指标。
+<span class="verified">已验证</span>
+</p>
+
+</section>
+
+<!-- ============================================================ -->
+<section id="fusion">
+<h2>5. 融合机制：两个分支的合体</h2>
+
+<p class="file-ref"><code>models/vq/model.py:119-138</code></p>
+
+<h3>5.1 2D 分支量化后的 linear_merge</h3>
+
+<p>
+6 个关节组独立量化后，需要一个交叉关节组的信息交换步骤：
+</p>
+
+<div class="diagram">
+<pre>
+linear_merge 数据流  <span class="verified">已验证</span>
+
+  quantizer2d 输出:     [B*6, 512, T/4]
+  reshape:              [B, 6*512, T/4]  = [B, 3072, T/4]
+  permute + reshape:    [B*T/4, 3072]
+  linear_merge:         nn.Linear(3072, 3072)     ── 跨组全连接
+  reshape + permute:    [B, 3072, T/4]
+  reshape:              [B, 6, 512, T/4]
+  rearrange:            [B, 512, T/4, 6]  = 'b d t j'
+</pre>
+</div>
+
+<p class="file-ref"><code>models/vq/model.py:55</code> &mdash;
+<code>self.linear_merge = nn.Linear(code_dim2d * J, code_dim2d * J)</code>
+<span class="verified">已验证</span>
+</p>
+
+<div class="key-concept">
+<h3>设计决策：为什么在量化之后加 linear_merge？</h3>
+<p>
+量化操作是逐组独立的，丢失了组间关联。<code>linear_merge</code>
+在量化后、解码前插入一个全连接层，让 6 个组的量化结果相互交流。
+这弥补了独立量化带来的信息割裂，让 decoder 看到的输入已经融合了全身信息。
+相当于一个轻量级的"全身一致性"约束。
+</p>
+</div>
+
+<h3>5.2 Decoder2d 解码与去 padding</h3>
+
+<p class="file-ref"><code>models/vq/encdec.py:104-135</code>, <code>models/vq/model.py:121-125</code></p>
+
+<div class="diagram">
+<pre>
+Decoder2d 数据流
+
+  输入: [B, 512, T/4, 6]
+
+  Conv2d + ReLU
+  2 &times; (Resnet2D + Upsample(2x) + Conv2d)
+  Conv2d + ReLU + Conv2d(512 &rarr; 12)
+
+  permute(0, 2, 3, 1) &rarr; [B, T, 24, 12]
+
+  去 padding:
+    x2d_out[:, :, 1:-1, :]   &rarr;  [B, T, 22, 12]    ── 去掉首尾各 1 个 pad 关节
+
+  reshape: [B*T, 22, 12]
+</pre>
+</div>
+
+<h3>5.3 最终线性融合 linear_out</h3>
+
+<p class="file-ref"><code>models/vq/model.py:58, 138</code>
+<span class="verified">已验证</span></p>
+
+<pre><code>self.linear_out = nn.Linear(input_width * 2, input_width)  # Linear(526, 263)
+
+# 前向传播:
+x_out2d = self.linear_out(torch.concat([x_out1d, jmotion], dim=2))
+# x_out1d: [B, T, 263]   ── 1D 分支解码输出
+# jmotion:  [B, T, 263]   ── 2D 分支重组后的运动
+# concat:  [B, T, 526]
+# output:  [B, T, 263]</code></pre>
+
+<div class="key-concept">
+<h3>设计决策：线性融合而非更复杂的 attention</h3>
+<p>
+融合层只是一个线性投影，没有用 cross-attention 或 gating mechanism。
+这是一个刻意的简洁选择 &mdash; 两个分支已经各自提供了完整的 263 维重建，
+<code>linear_out</code> 只需学习在每个特征维度上如何加权混合两个来源。
+<span class="verified">已验证</span>
+</p>
+<p>
+从训练损失来看（<code>models/vq/vq_trainer.py:70</code>），
+三路输出都有独立的重建监督：
+</p>
+<ul>
+  <li><strong>loss1</strong>: 1D 分支单独重建 &rarr; 训练 <code>x_out1d</code></li>
+  <li><strong>loss2</strong>: 2D 分支单独重建 &rarr; 训练 <code>jmotion</code></li>
+  <li><strong>loss</strong>: 融合后重建 &rarr; 训练 <code>linear_out</code> 的混合权重</li>
+</ul>
+<p>
+总损失 <code>loss_all = (loss1 + loss2) + loss</code>
+（<code>models/vq/vq_trainer.py:145</code>），三项等权相加。
+<span class="verified">已验证</span>
+</p>
+</div>
+
+</section>
+
+<!-- ============================================================ -->
+<section id="jmotion">
+<h2>6. jmotion 组装过程：从关节张量回到 263 维</h2>
+
+<p class="file-ref"><code>models/vq/model.py:123-136</code></p>
+
+<p>
+<code>x2d_out</code> 的形状是 <span class="tensor">[B&times;T, 22, 12]</span>
+（去 padding 之后）。将其重组回 263 维的 <code>jmotion</code>
+需要对根关节和非根关节分别处理：
+</p>
+
+<div class="diagram">
+<pre>
+jmotion 组装映射（HumanML3D, J0=22）  <span class="verified">已验证</span>
+
+  jmotion = zeros([B, T, 263])
+
+  ┌─ 根关节 j=0 的特殊处理 ──────────────────────────────────────────
+  │
+  │  jmotion[:,:, 0:4]   = x2d_out[:, 0, 0:4]     根特征 (rot_vel, lin_vel, root_y)
+  │  jmotion[:,:, 259:263] = x2d_out[:, 0, 4:8]    脚部接触 (4 维)
+  │
+  │  注: 输入 x_joints 中根关节的 [0:8] 是全零的!
+  │  因此 2D 分支在这些位置的重建趋近于零,
+  │  实际根特征和脚部接触由 1D 分支通过 linear_out 融合提供。
+  │
+  └────────────────────────────────────────────────────────────────────
+
+  ┌─ 非根关节 j=1..21 ───────────────────────────────────────────────
+  │
+  │  jmotion[:,:, 4:67]   = x2d_out[:, 1:, 0:3]    位置 ric_data  (21&times;3=63)
+  │  jmotion[:,:, 67:193] = x2d_out[:, 1:, 3:9]    旋转 rot_data  (21&times;6=126)
+  │
+  └────────────────────────────────────────────────────────────────────
+
+  ┌─ 全部关节 j=0..21 ──────────────────────────────────────────────
+  │
+  │  jmotion[:,:, 193:259] = x2d_out[:, :, 9:12]   速度 velocity  (22&times;3=66)
+  │
+  │  根关节的速度是 x_joints 中唯一非零的输入信号(j=0, [9:12])，
+  │  经过编码-量化-解码后在这里被还原。
+  │
+  └────────────────────────────────────────────────────────────────────
+</pre>
+</div>
+
+<p>
+组装逻辑在 <code>forward()</code> 和 <code>forward_decoder()</code> 中完全一致
+（<code>models/vq/model.py:131-135</code> vs <code>165-169</code>），保证训练和推理行为对齐。
+<span class="verified">已验证</span>
+</p>
+
+<div class="key-concept">
+<h3>设计决策：根关节的"空壳"编码</h3>
+<p>
+2D 分支输入中，根关节的 12 维特征只有速度（[9:12]）是有信号的，
+其余 9 维全零。但 jmotion 组装时仍然从根关节的解码输出中取 [0:4] 作为根特征、
+[4:8] 作为脚部接触。
+<span class="verified">已验证</span>
+</p>
+<p>
+实际效果：根特征和脚部接触完全依赖 1D 分支，2D 分支的 jmotion
+在这些位置贡献接近零，<code>linear_out</code> 学到的混合策略
+会自然将这些维度的权重分配给 1D 分支输出。
+</p>
+</div>
+
+<div class="key-concept">
+<h3>补充：loss2 中 loss_explicit_ts 的 ground truth 来源</h3>
+<p>
+<code>loss2</code> 的关节位置额外监督项 <code>loss_explicit_ts</code> 中，
+<code>pred_local_pos_ts</code> 是从 2D 分支 jmotion 中取的位置维度
+（<code>jmotion[..., 4:67]</code>），但 ground truth <code>local_pos</code>
+取自原始 263 维 <code>motion</code> 的相同索引区间，
+而非从 <code>x_joints</code> 重组的 jmotion。
+这意味着 2D 分支的位置重建是和原始运动数据对齐的，
+即使 jmotion 的组装方式与原始 263 维略有结构差异
+（根关节位置全零），位置监督仍然直接对标原始数据。
+</p>
+</div>
+
+</section>
+
+<!-- ============================================================ -->
+<section id="dataflow">
+<h2>7. 完整数据流图</h2>
+
+<div class="diagram">
+<pre>
+═══════════════════════════════════════════════════════════════════════
+         双分支 RVQ-VAE 编码-量化-解码 完整数据流
+═══════════════════════════════════════════════════════════════════════
+                                                      <span class="verified">已验证</span>
+输入: motion [B, T, 263]
+      x_joints [B, T, 22, 12]   &larr; 数据集预处理
+
+═══ 1D 分支 ══════════════════════════════════════════════════════════
+
+  motion ──permute──▶ [B, 263, T]
+    │
+    ▼
+  Encoder1d
+    Conv1d(263→512)     [B, 512, T]
+    2&times;(Conv1d↓2 + Resnet1D)
+    Conv1d(512→512)     [B, 512, T/4]
+    │
+    ▼
+  quantizer1d (ResidualVQ, 3 层)
+    │ ├──▶ code_idx1d    [B, T/4, 3]           &larr; 1D token 索引
+    │ ├──▶ commit_loss1d
+    ▼ └──▶ perplexity1d
+  x_quantized1d          [B, 512, T/4]
+    │
+    ▼
+  Decoder1d
+    Conv1d(512→512)
+    2&times;(Resnet1D + Upsample↑2 + Conv1d)
+    Conv1d(512→263)
+    permute              [B, T, 263]
+    │
+    ▼
+  x_out1d               [B, T, 263]            &larr; 1D 分支重建
+
+═══ 2D 分支 ══════════════════════════════════════════════════════════
+
+  x_joints ──pad(1,1)──▶ [B, T, 24, 12]
+    │
+    ▼
+  rearrange('b t j d → b d t j')
+                         [B, 12, T, 24]
+    │
+    ▼
+  Encoder2d
+    Conv2d(12→512)       [B, 512, T, 24]
+    2&times;(Conv2d↓2 + Resnet2D)
+    Conv2d(512→512)      [B, 512, T/4, 6]
+    │
+    ▼
+  rearrange('b d t j → (b&middot;j) d t')
+                         [B&middot;6, 512, T/4]       &larr; 6 组展开为独立样本
+    │
+    ▼
+  quantizer2d (ResidualVQ, 3 层, 6 组共享同一码本)
+    │                    训练时 temp=0.5 (Gumbel)；推理编码时 temp=0 (最近邻)
+    │ ├──▶ code_idx2d    [B, T/4, 6, 3]        &larr; 2D token 索引 (reshape 后)
+    │ ├──▶ commit_loss2d
+    ▼ └──▶ perplexity2d
+  x2d_quantized          [B&middot;6, 512, T/4]
+    │
+    ▼
+  reshape                [B, 3072, T/4]         &larr; 6&times;512 = 3072
+    │
+    ▼
+  linear_merge           [B, 3072, T/4]         &larr; 跨关节组信息交换
+    (Linear(3072→3072) 逐时间步应用)
+    │
+    ▼
+  reshape                [B, 6, 512, T/4]
+  rearrange('b j d t → b d t j')
+                         [B, 512, T/4, 6]
+    │
+    ▼
+  Decoder2d
+    Conv2d(512→512)
+    2&times;(Resnet2D + Upsample↑2 + Conv2d)
+    Conv2d(512→12)
+    permute              [B, T, 24, 12]
+    │
+    ▼
+  去 padding [:,:,1:-1,:] ▶ [B, T, 22, 12]
+    │
+    ▼
+  jmotion 组装
+    reshape [B&middot;T, 22, 12] → 分拆填入 263 维
+    root(j=0): [0:4]→根特征, [4:8]→脚部接触
+    others(j=1:): [0:3]→位置, [3:9]→旋转
+    all(j=0:): [9:12]→速度
+    │
+    ▼
+  jmotion                [B, T, 263]            &larr; 2D 分支重建
+
+═══ 融合 ═════════════════════════════════════════════════════════════
+
+  concat([x_out1d, jmotion], dim=2)
+                         [B, T, 526]
+    │
+    ▼
+  linear_out             Linear(526→263)
+    │
+    ▼
+  x_out2d                [B, T, 263]            &larr; 最终融合输出
+
+═══ 训练损失 ═════════════════════════════════════════════════════════
+
+  loss1 = L1(x_out1d, motion) + 0.5&middot;L1(pos1d, pos_gt) + 0.02&middot;commit1d
+  loss2 = L1(jmotion, jmotion_gt) + 0.5&middot;L1(pos_ts, pos_gt*) + 0.02&middot;commit2d
+  loss  = L1(x_out2d, motion)  + 0.5&middot;L1(pos_fused, pos_gt) + 0.02&middot;(commit1d+commit2d)/2
+
+  * pos_gt 来自原始 263 维 motion[..., 4:67]，不是从 x_joints 重组的
+
+  loss_all = (loss1 + loss2) + loss
+
+═══════════════════════════════════════════════════════════════════════
+</pre>
+</div>
+
+</section>
+
+<!-- ============================================================ -->
+<section id="training">
+<h2>8. 训练逻辑</h2>
+
+<p class="file-ref"><code>train_vq.py:37-128</code>, <code>models/vq/vq_trainer.py:33-72</code></p>
+
+<h3>8.1 损失函数分解</h3>
+
+<p>
+训练器的 <code>forward()</code> 计算三组损失，每组包含三项：
+<span class="verified">已验证</span>
+</p>
+
+<table>
+<thead>
+<tr><th>损失组</th><th>重建项</th><th>关节位置项</th><th>Commitment 项</th><th>监督目标</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>loss1</code></td>
+  <td><code>L1(x_out1d, motion)</code></td>
+  <td><code>0.5 &times; L1(pos1d, pos_gt)</code></td>
+  <td><code>0.02 &times; commit1d</code></td>
+  <td>1D 分支独立重建</td>
+</tr>
+<tr>
+  <td><code>loss2</code></td>
+  <td><code>L1(jmotion, jmotion_gt)</code></td>
+  <td><code>0.5 &times; L1(pos_ts, pos_gt)</code></td>
+  <td><code>0.02 &times; commit2d</code></td>
+  <td>2D 分支独立重建</td>
+</tr>
+<tr>
+  <td><code>loss</code></td>
+  <td><code>L1(x_out2d, motion)</code></td>
+  <td><code>0.5 &times; L1(pos_fused, pos_gt)</code></td>
+  <td><code>0.02 &times; (c1d+c2d)/2</code></td>
+  <td>融合后最终输出</td>
+</tr>
+</tbody>
+</table>
+
+<p class="file-ref">
+<code>models/vq/vq_trainer.py:145</code> &mdash; <code>loss_all = 1 * (loss1 + loss2) + loss</code>。
+三组等权相加，没有额外的权重调节。
+<span class="verified">已验证</span>
+</p>
+
+<div class="key-concept">
+<h3>设计决策：关节位置额外监督 (loss_explicit)</h3>
+<p>
+每组损失中，除了全 263 维的 L1 重建损失，还单独抽出关节位置维度
+（<code>motion[..., 4:(J-1)*3+4]</code>）计算额外的 L1 损失，
+权重 <code>loss_vel=0.5</code>（<code>vq_option.py:24</code>）。
+这是因为关节位置是评估指标（FID、diversity 等）最敏感的特征，
+额外监督让网络优先保证位置的准确性。
+<span class="verified">已验证</span>
+</p>
+</div>
+
+<h3>8.2 优化器与学习率策略</h3>
+
+<p class="file-ref"><code>vq_trainer.py:104-116</code>
+<span class="verified">已验证</span></p>
+
+<ul>
+  <li>优化器：AdamW（lr=2e-4, betas=(0.9, 0.99), weight_decay=0.0） <span class="verified">已验证</span></li>
+  <li>参数组：8 个参数组分别列出（encoder1d/decoder1d/quantizer1d/encoder2d/decoder2d/quantizer2d/linear_merge/linear_out），共享学习率 <span class="verified">已验证</span></li>
+  <li>Warmup：前 2000 步线性升温（<code>vq_option.py:18</code>） <span class="verified">已验证</span></li>
+  <li>Schedule：MultiStepLR，在 150k 和 250k 步衰减为 0.1x（<code>vq_option.py:20-21</code>） <span class="verified">已验证</span></li>
+  <li>重建损失：SmoothL1Loss（<code>vq_option.py:25</code>），比 L1 在小误差区域更平滑 <span class="verified">已验证</span></li>
+</ul>
+
+</section>
+
+<!-- ============================================================ -->
+<section id="length-estimator">
+<h2>9. LengthEstimator：从 CLIP embedding 预测 token 长度</h2>
+
+<p class="file-ref"><code>models/vq/model.py:175-209</code>
+<span class="verified">已验证</span></p>
+
+<p>
+在推理时，模型需要知道给定文本应该生成多长的运动。
+<code>LengthEstimator</code> 将长度预测建模为分类问题：
+</p>
+
+<div class="diagram">
+<pre>
+LengthEstimator 结构  <span class="verified">已验证</span>
+
+  输入: text_emb           [B, 512]    &larr; CLIP text embedding
+
+  Linear(512, 512) + LayerNorm + LeakyReLU(0.2)
+  Dropout(0.2)
+  Linear(512, 256) + LayerNorm + LeakyReLU(0.2)
+  Dropout(0.2)
+  Linear(256, 128) + LayerNorm + LeakyReLU(0.2)
+  Linear(128, output_size)
+
+  输出: logits             [B, output_size]   &larr; 各长度类别的得分
+</pre>
+</div>
+
+<div class="key-concept">
+<h3>设计决策：分类而非回归</h3>
+<p>
+<code>output_size</code> 等于可能的 token 长度数量。
+HumanML3D 的运动长度是 <code>unit_length</code>（默认 4）的整数倍，
+所以长度被离散化为 <code>m_lens // unit_length</code> 个类别。
+用 CrossEntropyLoss 训练（<code>models/vq/vq_trainer.py:225</code>），
+argmax 取最可能的长度。
+<span class="verified">已验证</span>
+</p>
+<p>
+分类比回归更适合这个任务：运动长度的分布是多峰的
+（"走路"可能 2-3 秒，"坐下"可能 1-2 秒），回归会被均值拉向中间，
+而分类可以精确命中峰值。
+</p>
+</div>
+
+<p>
+权重初始化用高斯分布（<code>models/vq/model.py:199-206</code>），
+标准差 0.02，LayerNorm 的 weight 初始化为 1.0、bias 初始化为 0.0。
+<span class="verified">已验证</span>
+</p>
+
+</section>
+
+<!-- ============================================================ -->
+<section id="inference">
+<h2>10. 推理路径：forward_decoder</h2>
+
+<p class="file-ref"><code>models/vq/model.py:143-172</code>
+<span class="verified">已验证</span></p>
+
+<p>
+mask transformer 生成的是 token 索引，推理时调用 <code>forward_decoder</code>
+直接从索引解码回运动：
+</p>
+
+<div class="diagram">
+<pre>
+forward_decoder 流程  <span class="verified">已验证</span>
+
+  输入:
+    x1d: [B, T/4, num_quantizers]     &larr; 1D token 索引
+    x2d: [B, T/4, 6, num_quantizers]  &larr; 2D token 索引
+
+  1D 解码:
+    codes = quantizer1d.get_codes_from_indices(x1d)   [Q, B, T/4, 512]
+    x1d = codes.sum(dim=0).permute(0, 2, 1)          [B, 512, T/4]
+    x_out1d = decoder1d(x1d)                          [B, T, 263]
+
+  2D 解码:
+    rearrange x2d → [(B&middot;6), T/4, Q]
+    codes = quantizer2d.get_codes_from_indices(...)    [Q, B&middot;6, T/4, 512]
+    x2d = codes.sum(dim=0)                            [B&middot;6, T/4, 512]
+    reshape → [B, 6&middot;512, T/4] = [B, 3072, T/4]
+    linear_merge                                       [B, 3072, T/4]
+    reshape → [B, 512, T/4, 6]
+    decoder2d → [B, T, 24, 12]
+    去 padding + jmotion 组装                           [B, T, 263]
+
+  融合:
+    x_out2d = linear_out(concat([x_out1d, jmotion]))  [B, T, 263]
+</pre>
+</div>
+
+<p>
+<code>get_codes_from_indices</code>（<code>residual_vq.py:64-91</code>）
+支持 quantize dropout 场景：索引值为 -1 的位置（被 dropout 的层）
+在 gather 后被 mask 为零向量，不影响求和。
+<span class="verified">已验证</span>
+</p>
+
+</section>
+
+<!-- ============================================================ -->
+<section id="summary">
+<h2>小结：双分支协同的整体思路</h2>
+
+<table>
+<thead>
+<tr><th>维度</th><th>1D 分支</th><th>2D 分支</th></tr>
+</thead>
+<tbody>
+<tr>
+  <td>输入</td>
+  <td>263 维拍平运动</td>
+  <td>[22, 12] 关节张量</td>
+</tr>
+<tr>
+  <td>卷积类型</td>
+  <td>Conv1d（纯时序）</td>
+  <td>Conv2d（时序 &times; 关节空间）</td>
+</tr>
+<tr>
+  <td>归纳偏置</td>
+  <td>全局时序模式</td>
+  <td>局部关节空间结构</td>
+</tr>
+<tr>
+  <td>下采样</td>
+  <td>仅时序 4x</td>
+  <td>时序 4x &times; 关节 4x</td>
+</tr>
+<tr>
+  <td>量化粒度</td>
+  <td>每时间步 1 个 token</td>
+  <td>每时间步 6 个 token（每组 1 个）</td>
+</tr>
+<tr>
+  <td>码本</td>
+  <td>独立码本</td>
+  <td>6 组共享码本</td>
+</tr>
+<tr>
+  <td>擅长表达</td>
+  <td>根运动、脚部接触、全身协调</td>
+  <td>关节位置、旋转、局部运动细节</td>
+</tr>
+<tr>
+  <td>Token 数</td>
+  <td>T/4 &times; Q 个 1D token</td>
+  <td>T/4 &times; 6 &times; Q 个 2D token</td>
+</tr>
+<tr>
+  <td>量化温度</td>
+  <td>训练 0.5 / 推理编码 0</td>
+  <td>训练 0.5 / 推理编码 0</td>
+</tr>
+</tbody>
+</table>
+
+<p>
+最终产出的 token 序列供下游 mask transformer 建模。
+1D token 和 2D token 各自携带互补的信息：
+1D 捕捉全局节奏和根运动，2D 捕捉关节级的精细动作。
+两者通过 <code>linear_out</code> 在运动空间融合，
+在 token 空间则由 mask transformer 联合生成。
+</p>
+
+</section>
+
+<!-- ============================================================ -->
+<section id="hyperparams">
+<h2>附录：默认超参数速查</h2>
+
+<p class="file-ref"><code>options/vq_option.py:7-66</code>
+<span class="verified">已验证</span></p>
+
+<table>
+<thead>
+<tr><th>参数</th><th>默认值</th><th>含义</th></tr>
+</thead>
+<tbody>
+<tr><td><code>down_t</code></td><td>2</td><td>下采样阶段数 <span class="verified">已验证</span></td></tr>
+<tr><td><code>stride_t</code></td><td>2</td><td>每阶段步幅 <span class="verified">已验证</span></td></tr>
+<tr><td><code>width</code></td><td>512</td><td>隐藏层宽度 <span class="verified">已验证</span></td></tr>
+<tr><td><code>depth</code></td><td>3</td><td>每阶段 ResNet block 数 <span class="verified">已验证</span></td></tr>
+<tr><td><code>dilation_growth_rate</code></td><td>3</td><td>扩张率指数底数 <span class="verified">已验证</span></td></tr>
+<tr><td><code>code_dim1d / code_dim2d</code></td><td>512</td><td>码本嵌入维度 <span class="verified">已验证</span></td></tr>
+<tr><td><code>nb_code1d / nb_code2d</code></td><td>512</td><td>码本大小 <span class="verified">已验证</span></td></tr>
+<tr><td><code>num_quantizers</code></td><td>3</td><td>RVQ 层数 <span class="verified">已验证</span></td></tr>
+<tr><td><code>quantize_dropout_prob</code></td><td>0.2</td><td>量化层 dropout 概率（argparse 默认值；构造器默认 0.5） <span class="verified">已验证</span></td></tr>
+<tr><td><code>mu</code></td><td>0.99</td><td>EMA 衰减系数 <span class="verified">已验证</span></td></tr>
+<tr><td><code>commit</code></td><td>0.02</td><td>Commitment loss 权重 <span class="verified">已验证</span></td></tr>
+<tr><td><code>loss_vel</code></td><td>0.5</td><td>关节位置额外损失权重 <span class="verified">已验证</span></td></tr>
+<tr><td><code>window_size</code></td><td>64</td><td>训练窗口长度（帧数） <span class="verified">已验证</span></td></tr>
+<tr><td><code>batch_size</code></td><td>256</td><td>批大小 <span class="verified">已验证</span></td></tr>
+<tr><td><code>lr</code></td><td>2e-4</td><td>学习率 <span class="verified">已验证</span></td></tr>
+<tr><td><code>recons_loss</code></td><td>l1_smooth</td><td>SmoothL1Loss <span class="verified">已验证</span></td></tr>
+</tbody>
+</table>
+
+<p class="note">
+注意：部分参数的 Python 构造器默认值与 argparse 默认值不一致
+（如 <code>down_t</code> 构造器默认 3 但 argparse 默认 2，
+<code>quantize_dropout_prob</code> 构造器默认 0.5 但 argparse 默认 0.2）。
+上表列出的是 argparse 默认值，即实际训练时使用的值。
+</p>
+
+</section>
+
+</main>
+
+<!-- ===== 页脚 ===== -->
+<footer>
+  <nav class="course-nav">
+    <a href="0001-overview.html">第 1 课: 系统总览</a>
+    <span class="nav-current">第 2 课: 双分支 RVQ-VAE</span>
+    <a href="0003-mask-transformer.html">第 3 课: Mask Transformer</a>
+    <a href="0004-text-conditioning.html">第 4 课: 文本条件</a>
+    <a href="0005-training-pipeline.html">第 5 课: 训练流程</a>
+    <a href="0006-inference-sampling.html">第 6 课: 推理与采样</a>
+    <a href="0007-evaluation.html">第 7 课: 评估与指标</a>
+    <a href="glossary.html">术语表</a>
+    <a href="cheatsheet.html">速查表</a>
+  </nav>
+  <p class="footer-hint">
+    对本课内容有疑问？可以继续向 agent 提问，例如：<code>/ask 关于双分支 RVQ-VAE 的 [你的问题]</code>
+  </p>
+</footer>
+
+</body>
+</html>

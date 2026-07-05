@@ -1,0 +1,8 @@
+# workspace guardrails (2026-07-05)
+_TPAMI_2026__ReMoMask_2/
+_TPAMI_2026__ReMoMask_2.zip
+remote_output/
+paper/raw/
+currentversion/*.zip
+__pycache__/
+*.pyc

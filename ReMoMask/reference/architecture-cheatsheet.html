@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReMoMask 架构速查手册</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+/* 速查手册专用样式 -- 高信息密度、适合打印 */
+@media print {
+  body { font-size: 9pt; }
+  .no-print { display: none; }
+  .page-break { page-break-before: always; }
+  section { page-break-inside: avoid; }
+}
+body { max-width: 1100px; margin: 0 auto; padding: 1.5em; }
+pre.diagram { background: #1a1a2e; color: #e0e0e0; padding: 1em; border-radius: 6px;
+  font-size: 12px; line-height: 1.45; overflow-x: auto; white-space: pre; }
+pre.diagram .highlight { color: #7ecfff; font-weight: bold; }
+pre.diagram .stage { color: #ffd166; }
+pre.diagram .data { color: #90ee90; }
+pre.diagram .arrow { color: #ff6b6b; }
+table { width: 100%; border-collapse: collapse; margin: 0.8em 0; font-size: 13px; }
+th { background: #2d2d44; color: #fff; padding: 6px 8px; text-align: left; font-weight: 600; }
+td { padding: 5px 8px; border-bottom: 1px solid #e0e0e0; vertical-align: top; }
+tr:nth-child(even) { background: #f7f7fb; }
+.tensor { font-family: 'Consolas', 'Fira Code', monospace; background: #eef2ff; padding: 1px 5px;
+  border-radius: 3px; font-size: 12px; color: #333; white-space: nowrap; }
+.file-ref { font-family: monospace; color: #0066cc; font-size: 12px; }
+.file-ref::before { content: ""; }
+.key-concept { background: #fff3cd; border-left: 3px solid #ffc107; padding: 0.6em 0.8em;
+  margin: 0.6em 0; font-size: 13px; }
+.verified { border-left-color: #28a745; background: #d4edda; }
+.section-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; }
+@media (max-width: 800px) { .section-grid { grid-template-columns: 1fr; } }
+h1 { font-size: 1.6em; border-bottom: 3px solid #2d2d44; padding-bottom: 0.3em; }
+h2 { font-size: 1.15em; margin-top: 1.4em; color: #2d2d44; border-bottom: 1px solid #ccc; padding-bottom: 0.2em; }
+h3 { font-size: 1em; margin-top: 1em; color: #555; }
+code { font-family: 'Consolas', 'Fira Code', monospace; font-size: 12px; background: #f0f0f0; padding: 1px 4px; border-radius: 3px; }
+.cmd { background: #1a1a2e; color: #e0e0e0; padding: 0.8em; border-radius: 6px; font-size: 12px;
+  line-height: 1.5; overflow-x: auto; white-space: pre-wrap; font-family: monospace; }
+.cmd .flag { color: #7ecfff; }
+.cmd .val { color: #ffd166; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px;
+  font-weight: 600; margin-right: 4px; }
+.badge-1d { background: #d4e6f1; color: #1a5276; }
+.badge-2d { background: #fadbd8; color: #922b21; }
+.badge-rag { background: #d5f5e3; color: #1e8449; }
+.badge-shared { background: #f9e79f; color: #7d6608; }
+nav.course-nav { background: #f8f9fa; padding: 0.8em; border-radius: 6px; margin-bottom: 1.5em; font-size: 13px; }
+nav.course-nav a { margin-right: 1em; text-decoration: none; color: #0066cc; }
+nav.course-nav a:hover { text-decoration: underline; }
+.compact-list { margin: 0.3em 0; padding-left: 1.5em; }
+.compact-list li { margin-bottom: 0.15em; font-size: 13px; }
+footer { margin-top: 2em; padding-top: 1em; border-top: 1px solid #ddd; font-size: 12px; color: #888; }
+</style>
+</head>
+<body>
+
+<nav class="course-nav no-print">
+  <strong>ReMoMask 课程导航:</strong>
+  <a href="../lessons/0001-dual-stream-rvqvae.html">Dual-Stream RVQ-VAE</a>
+  <a href="../lessons/0002-mask-predict-generation.html">Mask-Predict 生成</a>
+  <a href="../lessons/0003-semantics-modulated-attention.html">SSTA 语义注意力</a>
+  <a href="../lessons/0004-rag-retrieval-augmented.html">RAG 检索增强</a>
+  <a href="../lessons/0005-residual-refinement.html">残差细化</a>
+  <a href="architecture-cheatsheet.html"><strong>[当前] 架构速查</strong></a>
+</nav>
+
+<h1>ReMoMask 架构速查手册</h1>
+<p style="font-size:13px;color:#666;">高密度单页参考 &middot; 适合打印 &middot; 所有断言均标注源码位置</p>
+
+
+<!-- ============================================================ -->
+<h2>1. 完整流水线架构图</h2>
+<!-- ============================================================ -->
+
+<pre class="diagram">
+<span class="stage">TEXT PROMPT</span>                  <span class="stage">RAG DATABASE</span>
+    |                            |
+    v                            v
++----------+    tokenize    +-----------------+
+| MoCo-TMR |-------------&gt;| <span class="highlight">Retriever</span>        |  <span class="file-ref">models/rag/t2m_retriever.py:205</span>
+| Encoder  |    encode_text | cosine sim -&gt; KNN|
++----------+                | top_k motions   |
+    |                       +-----------------+
+    | <span class="data">caption_embedding</span>         | <span class="data">re_dict</span>
+    | <span class="tensor">(b, 512)</span>                   | <span class="tensor">{re_motion: (b,K,1,D), re_text: (b,K,1,D)}</span>
+    v                              v
++======================================================================+
+|  <span class="stage">STAGE 2a: Mask Transformer (1D Auxiliary)</span>                          |
+|  <span class="highlight">MaskTransformer</span>  <span class="file-ref">transformer_aux.py:86</span>                                |
+|  Standard TransformerEncoder + cosine masking                        |
+|  Input: <span class="tensor">(b, T)</span> token ids  -&gt;  Output: <span class="tensor">(b, T)</span> predicted ids            |
+|  Condition: text embedding prepended as [cond] token                 |
++======================================================================+
+    |                              |
+    | <span class="data">mids_aux</span> <span class="tensor">(b, T)</span>               v
+    |              +=====================================================+
+    |              |  <span class="stage">STAGE 2b: Mask Transformer (2D Temporal-Spatial)</span>  |
+    |              |  <span class="highlight">MaskTransformer2D</span>  <span class="file-ref">transformer_ts.py:114</span>           |
+    |              |  <span class="highlight">SemanticsModulatedAttention</span> x num_layers         |
+    |              |       <span class="file-ref">semantics_modulated.py:16</span>                    |
+    |              |  Input: <span class="tensor">(b, T, J)</span>  -&gt;  Output: <span class="tensor">(b, T, J)</span>            |
+    |              |  2D positional encoding (time x joint)              |
+    |              |  Info fusion: MLP([text; R_m; R_t]) -&gt; key/value    |
+    |              +=====================================================+
+    |                              |
+    | <span class="data">mids_aux</span>                       | <span class="data">mids_ts</span> <span class="tensor">(b, T, J)</span>
+    v                              v
++======================================================================+
+|  <span class="stage">STAGE 3a: Residual Transformer (1D)</span>       |  <span class="stage">STAGE 3b: Residual Transformer (2D)</span>  |
+|  <span class="highlight">ResidualTransformer</span>                     |  <span class="highlight">ResidualTransformer2D</span>              |
+|  <span class="file-ref">transformer_aux.py:610</span>                 |  <span class="file-ref">transformer_ts.py:800</span>              |
+|  Iterates quantizer layers 1..Q-1      |  Iterates quantizer layers 1..Q-1    |
+|  history_sum of code embeddings        |  2D PE + optional attnj/attnt         |
+|  Output: <span class="tensor">(b, T, Q)</span> all layer indices   |  Output: <span class="tensor">(b, T, J, Q)</span>                 |
++======================================================================+
+    |                              |
+    | <span class="data">mids_aux</span> <span class="tensor">(b, T, Q)</span>            | <span class="data">mids_ts</span> <span class="tensor">(b, T, J, Q)</span>
+    v                              v
++======================================================================+
+|                  <span class="stage">STAGE 1 (decoder): RVQVAE</span>                          |
+|                  <span class="highlight">RVQVAE.forward_decoder</span>  <span class="file-ref">models/vq/model.py:143</span>       |
+|                                                                      |
+|  1D path: quantizer1d.get_codes -&gt; sum -&gt; decoder1d -&gt; <span class="data">x_out1d</span>      |
+|           <span class="tensor">(b, T, 263)</span>                                               |
+|                                                                      |
+|  2D path: quantizer2d.get_codes -&gt; reshape (b,J) -&gt; linear_merge    |
+|           -&gt; decoder2d -&gt; unpad -&gt; reassemble 263-dim -&gt; <span class="data">jmotion</span>     |
+|           <span class="tensor">(b, T, 263)</span>                                               |
+|                                                                      |
+|  Fusion:  linear_out( concat[x_out1d, jmotion] ) -&gt; <span class="data">pred_motions</span>    |
+|           <span class="tensor">(b, T, 263)</span>                                               |
++======================================================================+
+    |
+    v
+<span class="data">inv_transform(pred_motions)</span> -&gt; <span class="data">recover_from_ric</span> -&gt; 3D joints -&gt; BVH/MP4
+</pre>
+
+<div class="key-concept verified">
+  <strong>核心设计决策 -- 双流架构:</strong>
+  1D 流捕获全局时序动态 (flatten 263-dim)；2D 流按关节分组 (J=6 body parts, 每个 12-dim) 建模空间结构。
+  两路在 VQ-VAE decoder 末端通过 <code>linear_out</code> 线性层融合。
+  <span class="file-ref">model.py:58</span> <span class="file-ref">model.py:138</span>
+</div>
+
+
+<!-- ============================================================ -->
+<h2>2. 张量形状速查表</h2>
+<!-- ============================================================ -->
+
+<h3><span class="badge badge-shared">VQ-VAE</span> 编码路径 <span class="file-ref">model.py:100-140</span></h3>
+<table>
+<tr><th>节点</th><th>形状</th><th>说明</th></tr>
+<tr><td>原始输入 x1d</td><td class="tensor">(B, T, 263)</td><td>HumanML3D 全局表示 (J0=22, 263-dim)</td></tr>
+<tr><td>preprocess</td><td class="tensor">(B, 263, T)</td><td>permute 为 Conv1d 格式</td></tr>
+<tr><td>encoder1d 输出</td><td class="tensor">(B, code_dim1d, T/4)</td><td>默认 down_t=2, stride=2 &rarr; 4x 下采样</td></tr>
+<tr><td>quantizer1d 输出 code_idx1d</td><td class="tensor">(B, T/4, Q)</td><td>Q = num_quantizers (默认 6)</td></tr>
+<tr><td>原始输入 x2d</td><td class="tensor">(B, T, J0, 12)</td><td>每关节 12-dim: 位置(3)+速度(3)+旋转(6)</td></tr>
+<tr><td>pad 后 x2d</td><td class="tensor">(B, T, J0+2, 12)</td><td>J0=22 &rarr; pad 到 24 (可被 4 整除)</td></tr>
+<tr><td>encoder2d 输出</td><td class="tensor">(B, code_dim2d, T/4, J)</td><td>J = 24/4 = 6 body parts</td></tr>
+<tr><td>quantizer2d 输入 (reshape)</td><td class="tensor">(B*J, code_dim2d, T/4)</td><td>逐关节独立量化</td></tr>
+<tr><td>quantizer2d 输出 code_idx2d</td><td class="tensor">(B, T/4, J, Q)</td><td>reshape 回 4D</td></tr>
+</table>
+
+<h3><span class="badge badge-shared">VQ-VAE</span> 解码路径 <span class="file-ref">model.py:143-172</span></h3>
+<table>
+<tr><th>节点</th><th>形状</th><th>说明</th></tr>
+<tr><td>1D codes lookup &amp; sum</td><td class="tensor">(B, code_dim1d, T/4)</td><td>Q 层 codebook embedding 求和</td></tr>
+<tr><td>decoder1d 输出 x_out1d</td><td class="tensor">(B, T, 263)</td><td>上采样 4x 恢复时间分辨率</td></tr>
+<tr><td>2D codes lookup &amp; sum</td><td class="tensor">(B, J*code_dim2d, T/4)</td><td>merge 后过 linear_merge</td></tr>
+<tr><td>decoder2d 输出</td><td class="tensor">(B, T, J0+2, 12)</td><td>需去掉 padding</td></tr>
+<tr><td>jmotion 重组</td><td class="tensor">(B, T, 263)</td><td>12-dim/joint 映射回 263 全局布局</td></tr>
+<tr><td>linear_out 融合输出</td><td class="tensor">(B, T, 263)</td><td>concat([x_out1d, jmotion]) &rarr; 线性投影</td></tr>
+</table>
+
+<h3><span class="badge badge-1d">1D Mask Transformer</span> 生成路径 <span class="file-ref">transformer_aux.py:86-436</span></h3>
+<table>
+<tr><th>节点</th><th>形状</th><th>说明</th></tr>
+<tr><td>初始 ids (全 mask)</td><td class="tensor">(B, T)</td><td>T = max(m_lens), 即 token 序列长度 (帧数/4)</td></tr>
+<tr><td>token_emb(ids)</td><td class="tensor">(B, T, code_dim1d)</td><td>code_dim1d 默认 512</td></tr>
+<tr><td>input_process 输出</td><td class="tensor">(T, B, latent_dim)</td><td>permute + linear 投影</td></tr>
+<tr><td>cond prepend</td><td class="tensor">(T+1, B, latent_dim)</td><td>text embedding 作为首 token</td></tr>
+<tr><td>TransformerEncoder</td><td class="tensor">(T+1, B, latent_dim)</td><td>标准 nn.TransformerEncoder</td></tr>
+<tr><td>output_process (去 cond)</td><td class="tensor">(B, num_tokens1d, T)</td><td>分类 logits</td></tr>
+</table>
+
+<h3><span class="badge badge-2d">2D Mask Transformer</span> + <span class="badge badge-rag">RAG</span> 生成路径 <span class="file-ref">transformer_ts.py:114-626</span></h3>
+<table>
+<tr><th>节点</th><th>形状</th><th>说明</th></tr>
+<tr><td>初始 ids (全 mask)</td><td class="tensor">(B, T, J)</td><td>J=6 body parts</td></tr>
+<tr><td>token_emb(ids)</td><td class="tensor">(B, T, J, code_dim2d)</td><td>code_dim2d 默认 1024</td></tr>
+<tr><td>input_process (flatten)</td><td class="tensor">(T*J, B, latent_dim)</td><td>T*J = 49*6 = 294 tokens</td></tr>
+<tr><td>position2d_enc</td><td class="tensor">(T, J, B, latent_dim)</td><td>2D sin/cos PE: 一半 dim 编码 J, 一半编码 T</td></tr>
+<tr><td>SSTA x num_layers</td><td class="tensor">(B, T*J, latent_dim)</td><td>SemanticsModulatedAttention 堆叠</td></tr>
+<tr><td>output_process</td><td class="tensor">(B, num_tokens2d, T*J)</td><td>分类 logits</td></tr>
+</table>
+
+<h3><span class="badge badge-rag">SSTA</span> 内部形状 <span class="file-ref">semantics_modulated.py:52-128</span></h3>
+<table>
+<tr><th>节点</th><th>形状</th><th>说明</th></tr>
+<tr><td>输入 x (motion tokens)</td><td class="tensor">(B, N, D)</td><td>N = T*J</td></tr>
+<tr><td>输入 xf (text prompt)</td><td class="tensor">(B, 1, D)</td><td>text embedding</td></tr>
+<tr><td>re_motion / re_text</td><td class="tensor">(B, K, D)</td><td>squeeze 后的检索特征, K = top_k</td></tr>
+<tr><td>R_m_pooled / R_t_pooled</td><td class="tensor">(B, 1, D)</td><td>K 条检索结果取均值</td></tr>
+<tr><td>fused_input = [xf; R_m; R_t]</td><td class="tensor">(B, 1, 3D)</td><td>拼接三路条件信号</td></tr>
+<tr><td>info = MLP(fused_input)</td><td class="tensor">(B, 1, D)</td><td>融合后的条件 token</td></tr>
+<tr><td>Q = W_q(z)</td><td class="tensor">(B, H, N, d_head)</td><td>query 仅来自 motion tokens</td></tr>
+<tr><td>K = W_k([z; info])</td><td class="tensor">(B, H, N+1, d_head)</td><td>key 包含融合条件</td></tr>
+<tr><td>V = W_v([z; R_m])</td><td class="tensor">(B, H, N+1, d_head)</td><td>value 只注入 motion-domain 特征</td></tr>
+<tr><td>attn output</td><td class="tensor">(B, N, D)</td><td>标准 scaled dot-product attention</td></tr>
+</table>
+
+
+<!-- ============================================================ -->
+<h2>3. 组件-文件映射表</h2>
+<!-- ============================================================ -->
+
+<table>
+<tr><th>组件</th><th>类名</th><th>文件路径</th><th>行号</th></tr>
+<tr><td><span class="badge badge-shared">VQ-VAE</span> 主模型</td><td><code>RVQVAE</code></td><td class="file-ref">models/vq/model.py</td><td>10</td></tr>
+<tr><td>1D 编码器</td><td><code>Encoder</code></td><td class="file-ref">models/vq/encdec.py</td><td>6</td></tr>
+<tr><td>2D 编码器</td><td><code>Encoder2d</code></td><td class="file-ref">models/vq/encdec.py</td><td>37</td></tr>
+<tr><td>1D 解码器</td><td><code>Decoder</code></td><td class="file-ref">models/vq/encdec.py</td><td>70</td></tr>
+<tr><td>2D 解码器</td><td><code>Decoder2d</code></td><td class="file-ref">models/vq/encdec.py</td><td>104</td></tr>
+<tr><td>残差向量量化</td><td><code>ResidualVQ</code></td><td class="file-ref">models/vq/residual_vq.py</td><td>28</td></tr>
+<tr><td>EMA Codebook</td><td><code>QuantizeEMAReset</code></td><td class="file-ref">models/vq/quantizer.py</td><td>--</td></tr>
+<tr><td>长度预测器</td><td><code>LengthEstimator</code></td><td class="file-ref">models/vq/model.py</td><td>175</td></tr>
+<tr><td><span class="badge badge-1d">1D Mask Trans.</span></td><td><code>MaskTransformer</code></td><td class="file-ref">models/transformer/transformer_aux.py</td><td>86</td></tr>
+<tr><td><span class="badge badge-1d">1D Residual Trans.</span></td><td><code>ResidualTransformer</code></td><td class="file-ref">models/transformer/transformer_aux.py</td><td>610</td></tr>
+<tr><td><span class="badge badge-2d">2D Mask Trans.</span></td><td><code>MaskTransformer2D</code></td><td class="file-ref">models/transformer/transformer_ts.py</td><td>114</td></tr>
+<tr><td><span class="badge badge-2d">2D Residual Trans.</span></td><td><code>ResidualTransformer2D</code></td><td class="file-ref">models/transformer/transformer_ts.py</td><td>800</td></tr>
+<tr><td>2D 位置编码</td><td><code>PositionalEncoding2D</code></td><td class="file-ref">models/transformer/transformer_ts.py</td><td>51</td></tr>
+<tr><td><span class="badge badge-rag">SSTA 注意力</span></td><td><code>SemanticsModulatedAttention</code></td><td class="file-ref">models/transformer/semantics_modulated.py</td><td>16</td></tr>
+<tr><td><span class="badge badge-rag">RAG 检索器</span></td><td><code>MocoTmrRetriever</code></td><td class="file-ref">models/rag/t2m_retriever.py</td><td>205</td></tr>
+<tr><td>RAG backbone</td><td><code>MoCoTMR</code></td><td class="file-ref">Part_TMR/models/builder_bimoco.py</td><td>--</td></tr>
+<tr><td>Motion Encoder (RAG)</td><td><code>MotionEncoder</code></td><td class="file-ref">models/rag/t2m_retriever.py</td><td>89</td></tr>
+<tr><td>工具函数</td><td><code>cosine_schedule, top_k, gumbel_sample, ...</code></td><td class="file-ref">models/transformer/tools.py</td><td>1-165</td></tr>
+</table>
+
+
+<!-- ============================================================ -->
+<h2>4. 超参数速查表</h2>
+<!-- ============================================================ -->
+
+<div class="section-grid">
+
+<div>
+<h3>Stage 1: RVQ-VAE <span class="file-ref">options/vq_option.py</span></h3>
+<table>
+<tr><th>参数</th><th>默认值</th><th>说明</th></tr>
+<tr><td><code>code_dim1d</code></td><td>512</td><td>1D codebook embedding 维度</td></tr>
+<tr><td><code>nb_code1d</code></td><td>512</td><td>1D codebook 大小</td></tr>
+<tr><td><code>code_dim2d</code></td><td>512 (推荐 1024)</td><td>2D codebook embedding 维度</td></tr>
+<tr><td><code>nb_code2d</code></td><td>512 (推荐 256)</td><td>2D codebook 大小</td></tr>
+<tr><td><code>num_quantizers</code></td><td>3 (推荐 6)</td><td>RVQ 层数</td></tr>
+<tr><td><code>down_t</code></td><td>2</td><td>下采样次数 &rarr; 4x 压缩</td></tr>
+<tr><td><code>stride_t</code></td><td>2</td><td>卷积步长</td></tr>
+<tr><td><code>width</code></td><td>512</td><td>ResNet block 通道数</td></tr>
+<tr><td><code>depth</code></td><td>3</td><td>每级 ResNet block 数</td></tr>
+<tr><td><code>dilation_growth_rate</code></td><td>3</td><td>膨胀率 1,3,9</td></tr>
+<tr><td><code>quantize_dropout_prob</code></td><td>0.2</td><td>训练时随机丢弃高层量化</td></tr>
+<tr><td><code>mu</code></td><td>0.99</td><td>EMA codebook 更新动量</td></tr>
+<tr><td><code>commit</code></td><td>0.02</td><td>commitment loss 权重</td></tr>
+<tr><td><code>loss_vel</code></td><td>0.5</td><td>速度重建 loss 权重</td></tr>
+<tr><td><code>batch_size</code></td><td>256</td><td>VQ 阶段批大小</td></tr>
+<tr><td><code>lr</code></td><td>2e-4</td><td>学习率</td></tr>
+<tr><td><code>max_epoch</code></td><td>50</td><td>训练轮数</td></tr>
+</table>
+</div>
+
+<div>
+<h3>Stage 2/3: Transformer <span class="file-ref">run_mtrans.sh / run_rtrans.sh</span></h3>
+<table>
+<tr><th>参数</th><th>典型值</th><th>说明</th></tr>
+<tr><td><code>latent_dim</code></td><td>512</td><td>transformer 隐层维度</td></tr>
+<tr><td><code>ff_size</code></td><td>1024</td><td>FFN 中间维度</td></tr>
+<tr><td><code>n_layers</code></td><td>8 (典型 9)</td><td>transformer 层数</td></tr>
+<tr><td><code>n_heads</code></td><td>4 (典型 8)</td><td>注意力头数</td></tr>
+<tr><td><code>dropout</code></td><td>0.1</td><td>dropout rate</td></tr>
+<tr><td><code>clip_dim</code></td><td>512</td><td>CLIP/MoCo-TMR 输出维度</td></tr>
+<tr><td><code>cond_drop_prob</code></td><td>0.1 (res: 0.01)</td><td>CFG 条件丢弃率</td></tr>
+<tr><td><code>batch_size</code></td><td>64</td><td>transformer 阶段批大小</td></tr>
+<tr><td><code>max_epoch</code></td><td>2000</td><td>训练轮数</td></tr>
+<tr><td><code>attnj</code></td><td>True</td><td>启用关节维度注意力</td></tr>
+<tr><td><code>attnt</code></td><td>True</td><td>启用时间维度注意力</td></tr>
+<tr><td><code>share_weight</code></td><td>True (Res.)</td><td>Residual Trans. embedding 权重共享</td></tr>
+</table>
+
+<h3>推理参数 <span class="file-ref">demo.py:310-327</span></h3>
+<table>
+<tr><th>参数</th><th>典型值</th><th>说明</th></tr>
+<tr><td><code>time_steps</code></td><td>10-20</td><td>mask-predict 迭代步数</td></tr>
+<tr><td><code>cond_scale</code></td><td>4-5</td><td>CFG scale</td></tr>
+<tr><td><code>temperature</code></td><td>1.0</td><td>采样温度</td></tr>
+<tr><td><code>topkr</code></td><td>0.9</td><td>top-k 过滤阈值 (保留 top 10%)</td></tr>
+<tr><td><code>gumbel_sample</code></td><td>True</td><td>使用 Gumbel-Softmax 采样</td></tr>
+</table>
+</div>
+
+</div>
+
+<div class="key-concept">
+  <strong>J=6 body parts 划分</strong> (定义于 <span class="file-ref">model.py:47</span> 及 <span class="file-ref">t2m_retriever.py:103</span>):<br>
+  从 22 关节 pad 到 24 再经 2 次 stride-2 降采样得到 6 个 part -- Root / R_Leg / L_Leg / Backbone / R_Arm / L_Arm。
+  每个 part 在 encoder2d 输出空间对应一个 spatial 位置。
+</div>
+
+<div class="key-concept">
+  <strong>263-dim 动作表示拆解</strong> (HumanML3D, <span class="file-ref">model.py:131-135</span>):<br>
+  <code>[:4]</code> root (来自 joint 0 前 4 维) &middot;
+  <code>[4:67]</code> 21 joints x 3 位置 &middot;
+  <code>[67:193]</code> 21 joints x 6 旋转 &middot;
+  <code>[193:259]</code> 22 joints x 3 速度 &middot;
+  <code>[-4:]</code> foot contact (来自 joint 0 后 4 维)
+</div>
+
+
+<!-- ============================================================ -->
+<h2>5. 训练命令速查</h2>
+<!-- ============================================================ -->
+
+<h3>Stage 1: RVQ-VAE 训练</h3>
+<div class="cmd">bash run_rvq.sh <span class="val">rvq_nq6</span> <span class="val">0</span> <span class="val">humanml3d</span> \
+  <span class="flag">--batch_size</span> <span class="val">256</span> \
+  <span class="flag">--num_quantizers</span> <span class="val">6</span> \
+  <span class="flag">--max_epoch</span> <span class="val">50</span> \
+  <span class="flag">--quantize_dropout_prob</span> <span class="val">0.2</span> \
+  <span class="flag">--gamma</span> <span class="val">0.1</span> \
+  <span class="flag">--code_dim2d</span> <span class="val">1024</span> \
+  <span class="flag">--nb_code2d</span> <span class="val">256</span></div>
+<p style="font-size:12px;color:#888;">脚本: <span class="file-ref">run_rvq.sh</span> &rarr; <span class="file-ref">train_vq.py</span>。单 GPU 训练，约 50 epoch 收敛。checkpoint 存入 <code>logs/humanml3d/&lt;name&gt;/model/</code></p>
+
+<h3>Stage 2: Mask Transformer 训练 (DDP)</h3>
+<div class="cmd">bash run_mtrans.sh <span class="val">mtrans_ssta</span> <span class="val">2</span> <span class="val">0,1</span> <span class="val">humanml3d</span> <span class="val">11234</span> \
+  <span class="flag">--vq_name</span> <span class="val">rvq_nq6</span> \
+  <span class="flag">--batch_size</span> <span class="val">64</span> \
+  <span class="flag">--max_epoch</span> <span class="val">2000</span> \
+  <span class="flag">--milestones</span> <span class="val">1000000</span> \
+  <span class="flag">--attnj</span> <span class="flag">--attnt</span></div>
+<p style="font-size:12px;color:#888;">脚本: <span class="file-ref">run_mtrans.sh</span> &rarr; <span class="file-ref">train_mask_transformer_ddp.py</span>。参数 2 = nproc_per_node (GPU 数)，11234 = master_port。同时训练 1D (aux) 和 2D (ts) 两个 Mask Transformer。</p>
+
+<h3>Stage 3: Residual Transformer 训练 (DDP)</h3>
+<div class="cmd">bash run_rtrans.sh <span class="val">rtrans_sw</span> <span class="val">2</span> <span class="val">0,1</span> <span class="val">humanml3d</span> <span class="val">12347</span> \
+  <span class="flag">--batch_size</span> <span class="val">64</span> \
+  <span class="flag">--vq_name</span> <span class="val">rvq_nq6</span> \
+  <span class="flag">--cond_drop_prob</span> <span class="val">0.01</span> \
+  <span class="flag">--share_weight</span> \
+  <span class="flag">--max_epoch</span> <span class="val">2000</span> \
+  <span class="flag">--milestones</span> <span class="val">1000000</span> \
+  <span class="flag">--attnj</span> <span class="flag">--attnt</span></div>
+<p style="font-size:12px;color:#888;">脚本: <span class="file-ref">run_rtrans.sh</span> &rarr; <span class="file-ref">train_res_transformer_ddp.py</span>。需要已训练好的 VQ-VAE checkpoint。</p>
+
+<div class="key-concept verified">
+  <strong>训练顺序是严格的:</strong> VQ-VAE 先行 &rarr; Mask Transformer (依赖 VQ codebook) &rarr; Residual Transformer (依赖 VQ codebook)。
+  长度预测器单独训练，checkpoint 固定存于 <code>checkpoints/&lt;dataset&gt;/length_estimator/model/finest.tar</code>。
+  <span class="file-ref">demo.py:150-156</span>
+</div>
+
+
+<!-- ============================================================ -->
+<h2>6. 推理命令速查</h2>
+<!-- ============================================================ -->
+
+<h3>demo.py 使用方式 <span class="file-ref">demo.py:166-356</span></h3>
+
+<div class="cmd"><span class="flag"># 单条文本生成</span>
+python demo.py \
+  <span class="flag">--gpu_id</span> <span class="val">0</span> \
+  <span class="flag">--ext</span> <span class="val">demo_output</span> \
+  <span class="flag">--text_prompt</span> <span class="val">"a person walks forward and turns around"</span> \
+  <span class="flag">--motion_length</span> <span class="val">196</span> \
+  <span class="flag">--mtrans_name</span> <span class="val">mtrans_ssta</span> \
+  <span class="flag">--rtrans_name</span> <span class="val">rtrans_sw</span> \
+  <span class="flag">--time_steps</span> <span class="val">18</span> \
+  <span class="flag">--cond_scale</span> <span class="val">5</span> \
+  <span class="flag">--temperature</span> <span class="val">1</span> \
+  <span class="flag">--topkr</span> <span class="val">0.9</span> \
+  <span class="flag">--gumbel_sample</span></div>
+
+<div class="cmd"><span class="flag"># 批量文本生成 (从文件读取)</span>
+python demo.py \
+  <span class="flag">--gpu_id</span> <span class="val">0</span> \
+  <span class="flag">--ext</span> <span class="val">batch_demo</span> \
+  <span class="flag">--text_path</span> <span class="val">input_prompts.txt</span> \
+  <span class="flag">--mtrans_name</span> <span class="val">mtrans_ssta</span> \
+  <span class="flag">--rtrans_name</span> <span class="val">rtrans_sw</span></div>
+
+<p style="font-size:12px;color:#888;">
+  <code>input_prompts.txt</code> 格式: 每行 <code>text_prompt=frame_count</code>，如 <code>a person jumps=120</code>。省略帧数则自动用 <code>LengthEstimator</code> 预测。
+  <br>输出目录: <code>./outputs/&lt;ext&gt;/joints/</code> (npy) 和 <code>./outputs/&lt;ext&gt;/animations/</code> (mp4 + bvh)。
+</p>
+
+<h3>推理流水线执行顺序 <span class="file-ref">demo.py:298-329</span></h3>
+<table>
+<tr><th>步骤</th><th>组件</th><th>输入</th><th>输出</th></tr>
+<tr><td>0</td><td><code>retriever(captions)</code></td><td>文本列表</td><td><code>re_dict</code> 检索特征</td></tr>
+<tr><td>1</td><td><code>retriever.encode_text()</code></td><td>文本列表</td><td><code>caption_embedding</code> <span class="tensor">(b, 512)</span></td></tr>
+<tr><td>2a</td><td><code>mask_transformer_aux.generate()</code></td><td>embedding + lengths</td><td><code>mids_aux</code> <span class="tensor">(b, T)</span></td></tr>
+<tr><td>2b</td><td><code>mask_transformer_ts.generate()</code></td><td>embedding + lengths + re_dict</td><td><code>mids_ts</code> <span class="tensor">(b, T, J)</span></td></tr>
+<tr><td>3a</td><td><code>res_transformer_aux.generate()</code></td><td>mids_aux + embedding</td><td><code>mids_aux</code> <span class="tensor">(b, T, Q)</span></td></tr>
+<tr><td>3b</td><td><code>res_transformer_ts.generate()</code></td><td>mids_ts + embedding</td><td><code>mids_ts</code> <span class="tensor">(b, T, J, Q)</span></td></tr>
+<tr><td>4</td><td><code>vq_model.forward_decoder()</code></td><td>mids_aux + mids_ts</td><td><code>pred_motions</code> <span class="tensor">(b, T, 263)</span></td></tr>
+<tr><td>5</td><td><code>inv_transform</code> + <code>recover_from_ric</code></td><td>pred_motions</td><td>3D joints <span class="tensor">(T, 22, 3)</span></td></tr>
+</table>
+
+<div class="key-concept">
+  <strong>模型加载顺序很重要:</strong>
+  VQ-VAE 先加载 (<code>code_dim1d</code>/<code>code_dim2d</code>/<code>num_code1d</code>/<code>num_code2d</code> 从 VQ checkpoint 读取)，
+  然后用这些维度信息初始化 Mask/Residual Transformer。
+  <span class="file-ref">demo.py:190-214</span>
+</div>
+
+<div class="key-concept verified">
+  <strong>CFG (Classifier-Free Guidance) 的两种实现:</strong><br>
+  1D Mask Transformer (<span class="file-ref">transformer_aux.py:311-329</span>): 标准 CFG，<code>mask_cond</code> 将 embedding 置零 &rarr; <code>scaled = uncond + (cond - uncond) * scale</code>。<br>
+  2D Mask Transformer (<span class="file-ref">transformer_ts.py:328-338</span>): 通过 <code>cond_type</code> 三路控制 -- text 条件、RAG 条件可分别开关，
+  <code>%10 > 0</code> 控制 text，<code>//10 > 0</code> 控制 retrieval。训练时随机采样 <code>cond_type in [0,100)</code>，10% 概率丢弃各条件。
+</div>
+
+<!-- ============================================================ -->
+<h2>附: 关键设计决策一览</h2>
+<!-- ============================================================ -->
+
+<table>
+<tr><th>决策</th><th>做法</th><th>位置</th></tr>
+<tr>
+  <td>双流量化而非单流</td>
+  <td>1D 全局流保留整体动态连贯性；2D 关节流保留空间精度。末端 <code>linear_out</code> 融合。</td>
+  <td class="file-ref">model.py:10-140</td>
+</tr>
+<tr>
+  <td>关节维度 pad 到 24</td>
+  <td>22 关节 pad 到 24 确保 2 次 stride-2 Conv2d 整除，降采样后得 J=6 body parts。</td>
+  <td class="file-ref">model.py:89-91</td>
+</tr>
+<tr>
+  <td>逐关节独立量化</td>
+  <td><code>(B*J, D, T)</code> 输入 quantizer2d -- 不同关节共享 codebook 但独立量化，保留身体部位独立性。</td>
+  <td class="file-ref">model.py:94, 118</td>
+</tr>
+<tr>
+  <td>SSTA 替代标准 self-attention</td>
+  <td>在 2D transformer 中，用 <code>SemanticsModulatedAttention</code> 将 text、retrieval motion、retrieval text 三路条件注入 key/value。</td>
+  <td class="file-ref">transformer_ts.py:219-222</td>
+</tr>
+<tr>
+  <td>Value 只注入 motion 特征</td>
+  <td>SSTA 的 V = W_v([z, R_m]) 不含 text embedding，避免语义信息直接覆盖运动细节。</td>
+  <td class="file-ref">semantics_modulated.py:99-102</td>
+</tr>
+<tr>
+  <td>训练时 temporal+spatial 二阶段 masking</td>
+  <td>先按时间步 mask 整行 (全关节)，再按 spatial 位置 mask 未被覆盖的 token。双重 masking 同时学到时空结构。</td>
+  <td class="file-ref">transformer_ts.py:437-479</td>
+</tr>
+<tr>
+  <td>Residual Transformer 逐层自回归</td>
+  <td>不做 mask-predict 迭代，而是按 quantizer 层级从第 1 层到第 Q-1 层逐步预测，history_sum 累加。</td>
+  <td class="file-ref">transformer_aux.py:947-980</td>
+</tr>
+<tr>
+  <td>RAG 条件独立于 text 条件</td>
+  <td>RAG 只送入 2D transformer 的 SSTA，1D transformer 仅接收 text embedding -- 因为关节级检索对 spatial 分支更有价值。</td>
+  <td class="file-ref">demo.py:314-325</td>
+</tr>
+<tr>
+  <td>MoCo-TMR 作为统一 encoder</td>
+  <td>推理时 text encoding 统一由 <code>retriever.encode_text()</code> 完成 (而非各 transformer 的 CLIP)，保持 embedding 空间一致。</td>
+  <td class="file-ref">demo.py:306-307</td>
+</tr>
+<tr>
+  <td>cosine schedule 控制 mask 比例</td>
+  <td><code>cos(t * pi/2)</code>: t=0 时 mask 100%，t=1 时 mask 0%。在 mask-predict 迭代中逐步揭露 token。</td>
+  <td class="file-ref">tools.py:120-121</td>
+</tr>
+</table>
+
+
+<footer class="no-print">
+  <p>ReMoMask 架构速查手册 &middot; 基于源码实际验证 &middot; 最近更新: 2026-06</p>
+  <p>有任何问题，可以直接向 agent 提问: "这个模块为什么这样设计?" / "帮我追踪这个张量的变换路径"</p>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ReMoMask 术语表</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<nav class="course-nav">
+  <a href="../reference/glossary.html" class="active">术语表</a>
+</nav>
+
+<header>
+  <h1>ReMoMask 术语表</h1>
+  <p class="subtitle">ReMoMask 代码库中核心概念的精确定义，每条均附源码引用。</p>
+</header>
+
+<main>
+
+<!-- ============================================================ -->
+<h2>核心架构术语</h2>
+<!-- ============================================================ -->
+
+<section class="glossary-entry" id="rvqvae">
+<h3>RVQVAE</h3>
+<p>
+  ReMoMask 的双路径运动量化器，内含一条 <strong>1D 路径</strong>（全局动作序列）和一条 <strong>2D 路径</strong>（逐关节组序列），两路各自经过编码器、残差向量量化、解码器，最终通过 <code>linear_out</code> 融合为统一的 263 维重建输出。
+</p>
+<p class="key-concept">
+  设计决策：将动作同时以"整体时间序列"和"时间 x 关节组"两个视角量化，1D 路径捕捉全局协调性，2D 路径保留身体部位的局部细节。
+</p>
+<p class="file-ref">models/vq/model.py:10-141 &mdash; <code>class RVQVAE(nn.Module)</code></p>
+<p><em>Avoid</em>: VQ-VAE（指代不够精确，ReMoMask 使用的是残差多层量化，并非单层 VQ-VAE）</p>
+</section>
+
+<section class="glossary-entry" id="encoder1d">
+<h3>Encoder1d (Encoder)</h3>
+<p>
+  1D 时间卷积编码器，将 <span class="tensor">(B, 263, T)</span> 的全局动作表示通过多层 stride-2 下采样（Conv1d + Resnet1D 块）压缩到 <span class="tensor">(B, code_dim1d, T/4)</span> 的隐码。下采样层数由 <code>down_t</code> 控制（默认 3 层，4x 下采样）。
+</p>
+<p class="file-ref">models/vq/encdec.py:5-34 &mdash; <code>class Encoder(nn.Module)</code></p>
+<p><em>Avoid</em>: 全局编码器（容易与 MotionEncoder 混淆）</p>
+</section>
+
+<section class="glossary-entry" id="decoder1d">
+<h3>Decoder1d (Decoder)</h3>
+<p>
+  Encoder1d 的镜像结构，通过 Resnet1D 块 + nearest 上采样将量化隐码还原为 <span class="tensor">(B, T, 263)</span> 的动作序列。解码器内部使用 reverse dilation 的 ResNet 块。
+</p>
+<p class="file-ref">models/vq/encdec.py:70-101 &mdash; <code>class Decoder(nn.Module)</code></p>
+</section>
+
+<section class="glossary-entry" id="encoder2d">
+<h3>Encoder2d</h3>
+<p>
+  2D 时空卷积编码器，输入 <span class="tensor">(B, D=12, T, J)</span>（每个关节 12 维特征 x 时间 x 关节组数），通过 Conv2d + Resnet2D 块在时间和关节两个维度同时下采样，输出 <span class="tensor">(B, code_dim2d, T/4, 6)</span>。进入编码器前，22 个关节会 pad 到 24 个以适配 2x 下采样。
+</p>
+<p class="file-ref">models/vq/encdec.py:37-67 &mdash; <code>class Encoder2d(nn.Module)</code></p>
+</section>
+
+<section class="glossary-entry" id="decoder2d">
+<h3>Decoder2d</h3>
+<p>
+  Encoder2d 的镜像结构，将量化后的 2D 隐码上采样还原为 <span class="tensor">(B, T, J_padded, 12)</span>，再切掉 padding 的关节并重组为 263 维表示。
+</p>
+<p class="file-ref">models/vq/encdec.py:104-135 &mdash; <code>class Decoder2d(nn.Module)</code></p>
+</section>
+
+<section class="glossary-entry" id="masktransformer">
+<h3>MaskTransformer</h3>
+<p>
+  1D 掩码 transformer，处理全局 token 序列（仅时间维度）。对应训练器中的 <code>mask_transformer_aux</code>，负责预测被掩盖的全局 VQ token。使用标准 TransformerEncoder + CLIP 文本条件 + cosine masking schedule。
+</p>
+<p class="file-ref">models/transformer/transformer_aux.py:86 &mdash; <code>class MaskTransformer(nn.Module)</code></p>
+<p><em>Avoid</em>: 主 transformer（实际上它是辅助路径，主路径是 MaskTransformer2D）</p>
+</section>
+
+<section class="glossary-entry" id="masktransformer2d">
+<h3>MaskTransformer2D</h3>
+<p>
+  2D 掩码 transformer，处理 <span class="tensor">(T, J=6)</span> 的时空 token 网格。对应训练器中的 <code>mask_transformer_ts</code>。核心创新是使用 <a href="#ssta">SemanticsModulatedAttention (SSTA)</a> 代替标准 TransformerEncoder，通过 RAG 检索的运动-文本特征调制 attention。同时采用两阶段掩码（先时间掩码再空间掩码）和 2D positional encoding。
+</p>
+<p class="key-concept">
+  设计决策：在同一个 transformer 中同时建模时间维度和关节组维度的依赖关系，而非分别用两个独立 transformer。SSTA 层将文本和 RAG 检索信息融合进 attention 的 key-value 对。
+</p>
+<p class="file-ref">models/transformer/transformer_ts.py:114-513 &mdash; <code>class MaskTransformer2D(nn.Module)</code></p>
+</section>
+
+<section class="glossary-entry" id="residualtransformer">
+<h3>ResidualTransformer (在 transformer_aux.py 中)</h3>
+<p>
+  1D 残差 transformer，在第一层量化码之上逐层预测后续量化层的 token。输入是前 k 层 token embedding 的累加和，输出第 k+1 层的 token 预测。使用 quantizer layer id 的 one-hot embedding 作为额外条件。
+</p>
+<p class="file-ref">models/transformer/transformer_aux.py &mdash; <code>class ResidualTransformer(nn.Module)</code></p>
+</section>
+
+<section class="glossary-entry" id="residualtransformer2d">
+<h3>ResidualTransformer2D</h3>
+<p>
+  2D 残差 transformer，功能与 ResidualTransformer 相同但在 <span class="tensor">(T, J)</span> 的 2D 网格上工作。支持三种 attention 模式：主序列 attention（flatten 的 T*J）、关节维 attention（<code>attnj</code>，J 个 token 间 attend）、时间维 attention（<code>attnt</code>，T 个时间步间 attend）。token embedding 权重可选 shared codebook 或独立 codebook，可选 share weight（embed 和 output projection 共享参数）。
+</p>
+<p class="key-concept">
+  设计决策：残差 transformer 的训练采用 <a href="#q-schedule">q_schedule</a> 随机采样活跃量化层，使每层都能学到有效残差。
+</p>
+<p class="file-ref">models/transformer/transformer_ts.py:800-1303 &mdash; <code>class ResidualTransformer2D(nn.Module)</code></p>
+</section>
+
+<section class="glossary-entry" id="ssta">
+<h3>SemanticsModulatedAttention (SSTA)</h3>
+<p>
+  语义调制注意力模块。将文本 prompt <code>xf</code>、RAG 检索到的运动特征 <code>re_motion</code> 和文本特征 <code>re_text</code> 三者融合为 info token，然后把 info token 拼接到 motion token 序列的 key 和 value 中参与 multi-head attention。具体流程：
+</p>
+<ol>
+  <li>Q = W_q &middot; LayerNorm(z)，只来自 motion token</li>
+  <li>info = MLP([t; mean(R_m); mean(R_t)])，三路拼接后过两层 MLP</li>
+  <li>K = W_k &middot; [z, info]，motion token 和 info token 拼接</li>
+  <li>V = W_v &middot; [z, mean(R_m)]，只使用 motion 域特征（不混入文本特征）</li>
+  <li>标准 scaled dot-product attention + output projection</li>
+</ol>
+<p>条件控制通过 <code>cond_type</code> 实现：<code>cond_type % 10 > 0</code> 决定是否使用文本条件，<code>cond_type // 10 > 0</code> 决定是否使用 RAG 检索条件。训练时随机采样 <code>cond_type</code>（0-99），实现 10% 文本 dropout 和 10% RAG dropout。</p>
+<p class="key-concept">
+  设计决策：value 只注入运动域特征、不注入文本特征，因为最终输出是运动 token 的预测——文本信息通过 key 影响 attention 权重分布，但不直接混入 value 避免"语义泄漏"。
+</p>
+<p class="file-ref">models/transformer/semantics_modulated.py:16-128 &mdash; <code>class SemanticsModulatedAttention(nn.Module)</code></p>
+</section>
+
+<section class="glossary-entry" id="mocotmr">
+<h3>MoCoTMR</h3>
+<p>
+  基于动量对比学习的文本-运动检索模型（Momentum Contrast Text-Motion Retrieval）。维护在线编码器和动量编码器各一套（motion + text），外加三组 queue（全局 motion queue、text queue、6 个 body part queue）。使用 InfoNCE loss 训练全局对齐，配合 <a href="#hbm-loss">HBM loss</a> 训练部位级对齐。动量系数默认 0.99，queue 大小 65536。
+</p>
+<p class="file-ref">Part_TMR/models/builder_bimoco.py:19-435 &mdash; <code>class MoCoTMR(nn.Module)</code></p>
+<p class="file-ref">config.py:9-13 &mdash; <code>global_momentum_config</code></p>
+<p><em>Avoid</em>: TMR（指代不够精确，ReMoMask 的检索模型在原版 TMR 基础上加入了动量编码器和部位级对齐）</p>
+</section>
+
+<section class="glossary-entry" id="mocotmrretriever">
+<h3>MocoTmrRetriever</h3>
+<p>
+  封装了 MoCoTMR 的推理态检索器。加载预计算的 motion/text embedding 数据库，对输入 caption 编码后计算 cosine 相似度排序，取 top-k 个最近邻运动（去重同一动作的不同变体），返回 <a href="#re-dict"><code>re_dict</code></a>。支持 <code>use_shuffle</code> 在候选池中随机打乱以增加多样性。
+</p>
+<p class="file-ref">models/rag/t2m_retriever.py:205-396 &mdash; <code>class MocoTmrRetriever(Retriever, nn.Module)</code></p>
+</section>
+
+<section class="glossary-entry" id="motionencoder">
+<h3>MotionEncoder</h3>
+<p>
+  将动作序列编码为固定长度向量的部位级 transformer 编码器。为 6 个身体部位各维护一个独立的 transformer encoder（不共享参数），每个部位编码器前置一个 <code>emb_token</code>（类似 BERT 的 [CLS] token），取 transformer 输出的第 0 位作为该部位的 embedding。输出三种特征：<code>global</code>（6 个部位 mean pool, <span class="tensor">(B, 512)</span>）、<code>parts</code>（堆叠, <span class="tensor">(B, 6, 512)</span>）、<code>concat</code>（拼接, <span class="tensor">(B, 3072)</span>）。
+</p>
+<p class="file-ref">Part_TMR/models/encdoc.py:92-215 &mdash; <code>class MotionEncoder(nn.Module)</code></p>
+</section>
+
+<section class="glossary-entry" id="textencoder">
+<h3>TextEncoder</h3>
+<p>
+  基于冻结 CLIP（ViT-B/32）的文本编码器。输入 tokenized text ids <span class="tensor">(B, 77)</span>，输出 <span class="tensor">(B, 512)</span> 的文本特征向量。权重始终冻结（<code>trainable=False</code>），推理时使用 <code>torch.no_grad()</code>。
+</p>
+<p class="file-ref">Part_TMR/models/encdoc.py:37-67 &mdash; <code>class TextEncoder(nn.Module)</code></p>
+<p><em>Avoid</em>: CLIP encoder（TextEncoder 只用了 CLIP 的文本编码部分，而非完整 CLIP 模型）</p>
+</section>
+
+<section class="glossary-entry" id="lengthestimator">
+<h3>LengthEstimator</h3>
+<p>
+  从文本 embedding 预测动作长度的 MLP 网络。4 层全连接（512 &rarr; 256 &rarr; 128 &rarr; output_size），带 LayerNorm、LeakyReLU 和 Dropout。用于推理时根据文本自动估算生成长度。
+</p>
+<p class="file-ref">models/vq/model.py:175-209 &mdash; <code>class LengthEstimator(nn.Module)</code></p>
+</section>
+
+<!-- ============================================================ -->
+<h2>算法术语</h2>
+<!-- ============================================================ -->
+
+<section class="glossary-entry" id="rvq">
+<h3>Residual Vector Quantization (RVQ)</h3>
+<p>
+  多层级向量量化方法（参照 <a href="https://arxiv.org/pdf/2107.03312.pdf">SoundStream</a> 的 Algorithm 1）。第 1 层量化器处理编码器输出，后续每层量化前一层的残差。训练时通过 <a href="#quantize-dropout">quantize dropout</a> 随机丢弃后 k 层以增强鲁棒性。ReMoMask 对 1D 和 2D 路径各维护一组独立的 RVQ（<code>quantizer1d</code> 和 <code>quantizer2d</code>），codebook 可选共享或独立。
+</p>
+<p class="file-ref">models/vq/residual_vq.py:28-194 &mdash; <code>class ResidualVQ(nn.Module)</code></p>
+<p class="file-ref">models/vq/quantizer.py:35-158 &mdash; <code>class QuantizeEMAReset(nn.Module)</code>（单层量化器，使用 EMA 更新 codebook + 死码重置）</p>
+</section>
+
+<section class="glossary-entry" id="cosine-schedule">
+<h3>Cosine masking schedule</h3>
+<p>
+  决定训练和生成过程中掩码比例的调度函数：<code>mask_ratio = cos(t * pi / 2)</code>，其中 <code>t</code> 从 0 到 1。t=0 时掩码比例为 1（全部掩码），t=1 时为 0（无掩码）。生成时 timestep 从 0 线性推进到 1，每步揭示一批新 token。这保证早期步骤做大范围预测（低信心），后期做精修（高信心）。
+</p>
+<p class="file-ref">models/transformer/tools.py:120-121 &mdash; <code>def cosine_schedule(t)</code></p>
+<p><em>Avoid</em>: cosine annealing（那是学习率调度，不同概念）</p>
+</section>
+
+<section class="glossary-entry" id="temporal-mask">
+<h3>时间掩码 (Temporal mask)</h3>
+<p>
+  MaskTransformer2D 训练的第一阶段掩码：在时间维度上采样要掩码的帧（<code>batch_randperm &lt; num_token_masked</code>），被选中时间步的所有 J=6 个关节组同时被掩码。掩码后的 token 按 BERT 策略处理（88% 替换为 <code>mask_id</code>，10% 替换为随机 token，2% 保持不变）。
+</p>
+<p class="file-ref">models/transformer/transformer_ts.py:437-456 &mdash; MaskTransformer2D.forward 中 <code># ========== temporal mask</code></p>
+</section>
+
+<section class="glossary-entry" id="spatial-mask">
+<h3>空间掩码 (Spatial mask)</h3>
+<p>
+  MaskTransformer2D 训练的第二阶段掩码：在展平后的 <span class="tensor">(T*J)</span> token 序列上独立采样掩码位置，已被时间掩码覆盖的位置排除在外（<code>mask &amp; ~mask_time</code>）。空间掩码允许同一帧内的不同关节组被独立掩码。
+</p>
+<p class="key-concept">
+  设计决策：先做时间掩码再做空间掩码，二者互斥。时间掩码让模型学习跨帧预测，空间掩码让模型学习同帧内的关节依赖。两阶段共同使用同一个 cosine schedule 采样掩码比例。
+</p>
+<p class="file-ref">models/transformer/transformer_ts.py:459-479 &mdash; MaskTransformer2D.forward 中 <code># ========== spatial mask</code></p>
+</section>
+
+<section class="glossary-entry" id="bert-perturbation">
+<h3>BERT 扰动 (BERT perturbation)</h3>
+<p>
+  借鉴 BERT 的掩码语言模型策略，对选中的掩码位置做三种处理：88% 替换为 <code>[MASK]</code> token，10% 替换为随机 token（<code>torch.randint_like(..., high=num_tokens)</code>），2% 保持原始 token 不变。通过 <code>get_mask_subset_prob</code> 实现子集采样。该策略同时应用于时间掩码和空间掩码阶段。
+</p>
+<p class="file-ref">models/transformer/transformer_ts.py:448-454 &mdash; 时间掩码的 BERT 扰动</p>
+<p class="file-ref">models/transformer/transformer_ts.py:471-479 &mdash; 空间掩码的 BERT 扰动</p>
+<p class="file-ref">models/transformer/tools.py:51-53 &mdash; <code>def get_mask_subset_prob(mask, prob)</code></p>
+</section>
+
+<section class="glossary-entry" id="cfg">
+<h3>Classifier-free guidance (CFG)</h3>
+<p>
+  推理时增强条件信号的技巧。对每个输入分别做条件生成和无条件生成（<code>force_mask=True</code>），最终 logits 按线性外推组合：<code>scaled = uncond + (cond - uncond) * cond_scale</code>。<code>cond_scale</code> 越大，生成结果越贴合文本条件但多样性下降。在 MaskTransformer2D 中，CFG 的条件 dropout 通过 <code>mask_text_and_retr_cond</code> 控制，同时覆盖文本和 RAG 条件。
+</p>
+<p class="file-ref">models/transformer/transformer_ts.py:492-513 &mdash; <code>MaskTransformer2D.forward_with_cond_scale</code></p>
+<p class="file-ref">models/transformer/transformer_ts.py:306-324 &mdash; <code>mask_text_and_retr_cond</code>（条件 dropout 控制）</p>
+</section>
+
+<section class="glossary-entry" id="hbm-loss">
+<h3>HBM contrastive loss</h3>
+<p>
+  Hierarchical Body-part Motion Loss，MoCoTMR 的核心训练目标。包含两层对齐：
+</p>
+<ul>
+  <li><strong>实例级 (L_Inst)</strong>：标准双向 InfoNCE，将全局运动特征和文本特征在 embedding 空间对齐。正样本来自动量编码器，负样本来自 queue。</li>
+  <li><strong>部位级 (L_Part)</strong>：对 6 个身体部位分别计算与文本的 InfoNCE loss，正样本为对应部位的动量特征，负样本来自该部位的 part queue。</li>
+</ul>
+<p>总 loss = L_Inst + lambda_part * L_Part，其中 <code>lambda_part</code> 默认 1.0。温度参数 tau = 0.07。</p>
+<p class="file-ref">Part_TMR/models/hbm_loss.py:7-131 &mdash; <code>class HBMLoss(nn.Module)</code></p>
+<p class="file-ref">Part_TMR/models/losses.py:5-49 &mdash; <code>compute_infonce_loss</code>（InfoNCE 的底层实现）</p>
+</section>
+
+<section class="glossary-entry" id="momentum-encoder">
+<h3>动量编码器 (Momentum encoder)</h3>
+<p>
+  MoCoTMR 中的慢更新编码器副本，参数按指数移动平均跟踪在线编码器：<code>theta_m = momentum * theta_m + (1 - momentum) * theta</code>。动量系数默认 0.99。动量编码器生成的特征用作 InfoNCE 的正样本（positive key），并入队作为后续 batch 的负样本。模型维护 4 对动量参数对（motion encoder、motion projection、text encoder、text projection）。
+</p>
+<p class="file-ref">Part_TMR/models/builder_bimoco.py:354-357 &mdash; <code>_momentum_update</code></p>
+<p class="file-ref">Part_TMR/models/builder_bimoco.py:131-143 &mdash; <code>model_pairs</code> 定义</p>
+<p class="file-ref">config.py:10 &mdash; <code>'momentum': 0.99</code></p>
+</section>
+
+<section class="glossary-entry" id="commitment-loss">
+<h3>Commitment loss</h3>
+<p>
+  量化器的正则化损失，定义为编码器输出与其量化码的 MSE：<code>F.mse_loss(x, x_d.detach())</code>。鼓励编码器输出"靠近"codebook 向量，防止编码器输出在空间中漫游导致量化不稳定。梯度只反传到编码器（<code>x_d.detach()</code>），codebook 通过 EMA 更新。在 RVQ 中，所有量化层的 commitment loss 取平均。
+</p>
+<p class="file-ref">models/vq/quantizer.py:147 &mdash; <code>commit_loss = F.mse_loss(x, x_d.detach())</code></p>
+<p class="file-ref">models/vq/residual_vq.py:157 &mdash; <code>all_losses = sum(all_losses)/len(all_losses)</code></p>
+</section>
+
+<section class="glossary-entry" id="quantize-dropout">
+<h3>Quantize dropout</h3>
+<p>
+  RVQ 训练的正则化技巧：以概率 <code>quantize_dropout_prob</code>（默认 0.5）随机截断后续量化层，被截断的层输出 <code>null_indices = -1</code>。让解码器学会在仅有前 k 层量化码的情况下也能合理重建，提升推理时对量化层数的鲁棒性。
+</p>
+<p class="file-ref">models/vq/residual_vq.py:112-127 &mdash; <code>should_quantize_dropout</code> 逻辑</p>
+</section>
+
+<section class="glossary-entry" id="q-schedule">
+<h3>q_schedule</h3>
+<p>
+  ResidualTransformer2D 训练时采样活跃量化层索引的调度函数：<code>q = round((1 - cosine_schedule(noise)) * (high - low - 1)) + low</code>。倾向于选择较浅层（小索引概率更高），因为浅层残差更大、更重要。
+</p>
+<p class="file-ref">models/transformer/tools.py:127-130 &mdash; <code>def q_schedule(bs, low, high, device)</code></p>
+</section>
+
+<!-- ============================================================ -->
+<h2>数据术语</h2>
+<!-- ============================================================ -->
+
+<section class="glossary-entry" id="humanml3d-263">
+<h3>HumanML3D 263 维表示</h3>
+<p>
+  HumanML3D 数据集的标准动作表示格式，263 维的含义拆解如下（<code>joints_num = 22</code>）：
+</p>
+<table class="tensor-table">
+  <thead><tr><th>区间</th><th>维度</th><th>内容</th></tr></thead>
+  <tbody>
+    <tr><td>[0:4]</td><td>4</td><td>root_data：根节点旋转速度(1) + 线速度(2) + y 高度(1)</td></tr>
+    <tr><td>[4:67]</td><td>63</td><td>ric_data：(22-1) 个关节相对根节点的位置，每个 3 维</td></tr>
+    <tr><td>[67:193]</td><td>126</td><td>rot_data：(22-1) 个关节的 6D 连续旋转表示</td></tr>
+    <tr><td>[193:259]</td><td>66</td><td>local_vel：22 个关节的局部速度，每个 3 维</td></tr>
+    <tr><td>[259:263]</td><td>4</td><td>feet：4 个足部接触标签（左脚跟、左脚尖、右脚跟、右脚尖）</td></tr>
+  </tbody>
+</table>
+<p>KIT 数据集为 251 维（<code>joints_num = 21</code>），结构相同。</p>
+<p class="file-ref">data/t2m_dataset.py:44-64 &mdash; MotionDataset.__init__ 中的维度注释</p>
+<p class="file-ref">Part_TMR/datasets/utils.py:15-78 &mdash; <code>whole2parts</code> 中的详细拆解</p>
+</section>
+
+<section class="glossary-entry" id="joint-groups">
+<h3>关节组 (Joint groups)</h3>
+<p>
+  ReMoMask 将 22 个 SMPL 关节按身体区域分为 6 组，用于部位级编码和 HBM loss。以下为 HumanML3D（t2m 模式）的映射：
+</p>
+<table class="tensor-table">
+  <thead><tr><th>组名</th><th>关节索引</th><th>维度</th><th>内容</th></tr></thead>
+  <tbody>
+    <tr><td>Root</td><td>0</td><td>7</td><td>root_data(4) + root_velocity(3)</td></tr>
+    <tr><td>R_Leg</td><td>2, 5, 8, 11</td><td>50</td><td>4 关节 x 12 维(pos+rot+vel) + 2 足部接触</td></tr>
+    <tr><td>L_Leg</td><td>1, 4, 7, 10</td><td>50</td><td>4 关节 x 12 维 + 2 足部接触</td></tr>
+    <tr><td>Backbone</td><td>3, 6, 9, 12, 15</td><td>60</td><td>5 关节 x 12 维</td></tr>
+    <tr><td>R_Arm</td><td>9, 14, 17, 19, 21</td><td>60</td><td>5 关节 x 12 维（含共享关节 9）</td></tr>
+    <tr><td>L_Arm</td><td>9, 13, 16, 18, 20</td><td>60</td><td>5 关节 x 12 维（含共享关节 9）</td></tr>
+  </tbody>
+</table>
+<p>关节 9（upper chest / spine3）被 Backbone、R_Arm、L_Arm 三组共享，重建时默认取三者平均（<code>shared_joint_rec_mode="Avg"</code>）。</p>
+<p class="key-concept">
+  设计决策：共享关节 9 的存在让手臂和躯干在编码时都能看到上胸的信息，但重建时需要冲突消解策略。
+</p>
+<p class="file-ref">Part_TMR/datasets/utils.py:80-84 &mdash; 关节索引定义</p>
+<p class="file-ref">Part_TMR/datasets/utils.py:155-175 &mdash; 6 组拼接结果</p>
+<p class="file-ref">Part_TMR/datasets/utils.py:370-399 &mdash; <code>parts2whole</code> 中的共享关节消解</p>
+</section>
+
+<section class="glossary-entry" id="re-dict">
+<h3>re_dict</h3>
+<p>
+  RAG 检索结果的标准数据结构，由 <code>MocoTmrRetriever.forward()</code> 返回。包含两个 key：
+</p>
+<ul>
+  <li><code>re_motion</code>: <span class="tensor">(B, K, 1, D)</span> &mdash; 检索到的 K 个运动的 embedding，D=512</li>
+  <li><code>re_text</code>: <span class="tensor">(B, K, 1, D)</span> &mdash; 对应 K 个运动的文本 caption embedding</li>
+</ul>
+<p>这两组特征在 <a href="#ssta">SSTA</a> 中被 squeeze 为 <span class="tensor">(B, K, D)</span> 后 mean-pool 为 <span class="tensor">(B, 1, D)</span>，分别作为 R_m 和 R_t 参与 info fusion 和 value 构建。K 默认值由 <code>cfg.rag.top_k</code> 控制。</p>
+<p class="file-ref">models/rag/t2m_retriever.py:356-396 &mdash; <code>MocoTmrRetriever.forward</code> 构建 re_dict</p>
+<p class="file-ref">models/transformer/semantics_modulated.py:59 &mdash; SSTA.forward 的 <code>re_dict</code> 参数说明</p>
+</section>
+
+<section class="glossary-entry" id="2d-joint-repr">
+<h3>2D 关节表示 (x_joints)</h3>
+<p>
+  RVQVAE 2D 路径的输入格式，形状 <span class="tensor">(B, T, J=22, 12)</span>。每个关节 12 维 = 位置(3) + 6D 旋转(6) + 速度(3)。根关节（index 0）的位置/旋转维度存放 root_data 和 feet 信息，其他关节直接存放 ric_data、rot_data、local_vel。该表示由 <code>t2m_dataset.py</code> 的 <code>__getitem__</code> 在线构建。
+</p>
+<p class="file-ref">data/t2m_dataset.py:96-116 &mdash; x_joints 构建逻辑</p>
+<p class="file-ref">models/vq/model.py:109 &mdash; RVQVAE.forward 中 x2d 输入 shape 注释 <code>[bs,T,J,D]</code></p>
+</section>
+
+<section class="glossary-entry" id="ema-codebook">
+<h3>EMA codebook 更新</h3>
+<p>
+  codebook 向量不通过梯度更新，而是使用指数移动平均（Exponential Moving Average）跟踪编码器输出的聚类中心。更新公式：<code>code_sum = mu * code_sum + (1 - mu) * batch_sum</code>，<code>code_count = mu * code_count + (1 - mu) * batch_count</code>，<code>codebook = code_sum / code_count</code>。使用计数低于 1 的码字（死码）会被随机重置为当前 batch 中的向量（<code>QuantizeEMAReset</code> 的 Reset 含义）。
+</p>
+<p class="file-ref">models/vq/quantizer.py:100-123 &mdash; <code>QuantizeEMAReset.update_codebook</code></p>
+</section>
+
+<section class="glossary-entry" id="gumbel-sample">
+<h3>Gumbel sampling</h3>
+<p>
+  量化器和生成器中用的随机采样方法。在 logits 上加入 Gumbel 噪声后取 argmax：<code>sample = argmax(logits/temp + gumbel_noise)</code>。温度参数控制随机性：temp &rarr; 0 趋近于 greedy，temp &rarr; inf 趋近于均匀采样。量化器默认 <code>sample_codebook_temp=0.5</code>。
+</p>
+<p class="file-ref">models/vq/quantizer.py:18-33 &mdash; 量化器中的 gumbel_sample</p>
+<p class="file-ref">models/transformer/tools.py:94-95 &mdash; 生成器中的 gumbel_sample</p>
+</section>
+
+<section class="glossary-entry" id="perplexity">
+<h3>Perplexity (codebook 利用率)</h3>
+<p>
+  衡量 codebook 利用是否均匀的指标，计算方式为 <code>exp(-sum(p * log(p)))</code>，其中 p 是各码字的使用频率。perplexity 等于 codebook 大小说明所有码字被均匀使用；接近 1 说明严重坍缩。在训练日志中用于监控 codebook 健康度。
+</p>
+<p class="file-ref">models/vq/quantizer.py:90-98 &mdash; <code>compute_perplexity</code></p>
+</section>
+
+</main>
+
+<footer>
+  <p>本术语表基于 ReMoMask 源码生成。如有疑问，可以直接向 agent 提问以获取更详细的解释。</p>
+</footer>
+
+</body>
+</html>
