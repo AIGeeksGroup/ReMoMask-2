@@ -1,0 +1,42 @@
+[
+  {
+    "severity": "major",
+    "description": "FIXED — Internal contradiction + overclaim in 'Integration with SSTA': 'any improvement over the conference system is attributable to where the evidence lives, not to additional fusion capacity' claims ALL V2-over-V1 improvement comes from the retrieval space, contradicting the very next subsection (subsec:vroute), which credits the R_t-in-Value routing with its own FID gain ([TBD]), and overclaims while all V2 results are placeholders. Rescoped to 'any improvement it yields' so the attribution claim covers only the retrieval-space replacement itself."
+  },
+  {
+    "severity": "minor",
+    "description": "FIXED — $t^{(j)}$ was used in 'Integration with SSTA' (and again in subsec:vroute) without definition; only $x^{(j)}$ (the caption) is defined in the database equation. Clarified that $t^{(j)}$ is the CLIP embedding of caption $x^{(j)}$."
+  },
+  {
+    "severity": "minor",
+    "description": "NOT FIXED (deliberate, flagged per plan) — d_e = 1024 in the new text coexists with the untouched V1 implementation sentence 'codebook of 512 codes of 512-dimensios' (pami.tex line 1543). This follows V2-REVISION-PLAN risk #5 (V1 text untouched, V2 sections use the ckpt fact 1024), but a reviewer may notice the discrepancy — user decision pending. Note line 1543 also has pre-existing typos ('contraining', 'dimensios')."
+  },
+  {
+    "severity": "minor",
+    "description": "OK AS-IS but must be resolved before submission — the Hinton knowledge-distillation citation is a TODO-CITE comment (correct: no invented key; reference.bib has no KD entry). Add the bib entry and replace the comment with a real \\cite when finalizing."
+  },
+  {
+    "severity": "minor",
+    "description": "Pending follow-up per V2-REVISION-PLAN — tab:notation must gain the new symbols introduced here (z_e, \\bar{z}_e, d_e, T', J', \\mathcal{S}, \\mathcal{Z}, \\mathcal{E}, \\mathcal{D}, M, \\phi, \\psi, \\kappa, \\Omega(x), p^{HBM}/p^{\\phi}, \\mathcal{L}_align). Verified none of these collide with existing pami.tex notation (grep found no prior use), so no renames needed."
+  },
+  {
+    "severity": "minor",
+    "description": "Index j' is reused with two different local meanings: spatial grid position in the pooling equation vs. candidate index in the softmax denominator over Omega(x). Both are locally bound and unambiguous, but renaming one (e.g., k' in the softmax) would be cleaner."
+  },
+  {
+    "severity": "minor",
+    "description": "'optimized purely for reconstruction' (describing the RVQ-VAE latent space) is a slight simplification — RVQ training also involves commitment/codebook objectives. Conceptually harmless; left as is to preserve the author's contrast with the contrastive objective."
+  },
+  {
+    "severity": "minor",
+    "description": "Dataset-count tension a reviewer may raise: the new text states 23,384 training motions / 66,912 (motion, caption) pairs (correct per FACTS, i.e., the mirror-augmented HumanML3D train split), while the existing dataset section says HumanML3D has 14,616 motions / 44,970 texts. Consistent once augmentation is accounted for; consider a clarifying footnote when the experiments section is written."
+  },
+  {
+    "severity": "minor",
+    "description": "'At generation time, the query \\phi(t) retrieves...' could be read as inference-only, though retrieval also feeds the generator during its training. The existing Overview uses similarly time-neutral phrasing, so left unchanged."
+  },
+  {
+    "severity": "minor",
+    "description": "Verification notes (no action): all facts match PLAN-A-FACTS.md (d_e=1024, T/4, J'=6, 66,912 pairs / 23,384 motions, W1 1024x512 + W2 1024x1024 ~= 1.57M params, kappa=256, tau=0.07 'matching the retriever's contrastive temperature' per FACTS 02-03, KL(teacher||student) direction, 200 epochs / batch 128, frozen VQ-VAE/teacher/CLIP, per-stream 1024->d adapters, dedup by source motion); the rt_in_value story strictly follows the premise-changed framing and never disparages the ECCV version (tab:ablation row V={R_t,R_m} FID 0.104 accurately paraphrased without numbers); all cite keys (remodiffuse, remogpt, morag, mogents, clip) exist in reference.bib; refs sec:introduction/subsec:ssta/tab:ablation/sec:experiment all exist; new labels subsec:lar/subsec:vroute are unique; the only performance number is the sanctioned \\textbf{[TBD]} placeholder; LaTeX is balanced (7 equation envs, braces/dollars even); insertion-point line numbers (1029/1031, 1208/1213) verified against pami.tex."
+  }
+]

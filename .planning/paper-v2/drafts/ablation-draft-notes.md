@@ -1,0 +1,26 @@
+INSERTION ANCHORS (D:/tpami/currentversion/v2working/pami.tex, current line numbers):
+- Blocks 0-5 (new subsection + 4 tables + prose): insert after the "Complete Retrieval Ablation" table (ends `\end{table}` at ~line 1780, label tab:rag_ablation) and before `\subsection{Qualitative Results}` at line 1783. Tables float; keep them in source order near the subsection so first references resolve nearby.
+- Block 6: append inside `\subsection{Implementation Details}` (line 1530), immediately after "All models are implemented in PyTorch." (line 1536). It is written to be hardware-silent for the masked-model retrain, so it cannot contradict the existing "8 Tesla A800" sentence.
+
+SUGGESTED NEW ROWS FOR tab:notation (line ~1947; add after the $R_t$ row or at the end, same two-column format):
+  $z_e$ & Pre-quantization motion latent from the frozen 2D-RVQ-VAE encoder; pooled and $\ell_2$-normalized as retrieval key \\
+  $\phi$ & Query projector mapping the CLIP text embedding into the $z_e$ space \\
+  $q$ & Projected text query, $q = \phi(t)$ \\
+  $p_{\mathrm{HBM}}, p_{\phi}$ & Teacher and student retrieval distributions over top-ranked candidates in KL distillation \\
+
+DESIGN RATIONALE:
+- 2x2 orthogonal table is the load-bearing evidence for BOTH the latent-alignment claim and the "premise changed" rt_in_value narrative: main effect (rows) = retrieval space, second factor (checkmark column) = routing; near-additive composition = independence claim. First row doubles as the conference configuration retrained under the journal protocol, which pre-empts "is the gain just retraining?" while the caption wording ("retrained under the journal protocol") blocks direct comparison against the published 0.026 in tab:t2m_experiment.
+- Alignment-objective and teacher tables carry the two LOCKED design decisions (KL over InfoNCE; HBM over TMR). Per the placeholder policy I did NOT put the preliminary 43.46 vs 41.86 numbers in the table — V2-REVISION-PLAN marks them "占位重验" (to re-verify); the table stays xx.xx.
+- Sensitivity table included deliberately (TPAMI reviewers expect it, and the paper already has fig:hyperparameter for HBM, so it matches house convention). Kept retrieval-only (no FID column) so the sweep needs only cheap projector retrains, not masked-model retrains.
+- Prose uses only FACTS-listed measured numbers: cosine mean 0.62 / std 0.25 / range [-0.55, 0.998], 11/1024 effective dims, 7 dims -> 95% variance, 66,912 pairs / 23,384 motions, top-256, tau 0.07; plus numbers already printed in pami.tex (0.104 vs 0.027 from tab:ablation; 18.49 vs 5.68 from tab:rag_experiment). Everything else is \textbf{[TBD]}.
+- Highlighting convention: yellow!20 reserved for the single full ReMoMask-2 row (matches tab:delta line 655); \rowcolor[gray]{0.90} for adopted-default rows (matches existing ablation tables).
+
+RISKS / OPEN QUESTIONS:
+1. Naming: I wrote "Semantic (HBM)" rather than "Part_TMR" — the paper never uses the code name Part_TMR; HBM is the published name of the V1 retriever/space. Flip if you prefer.
+2. Deferred cross-references: two TODO-REF comments — (a) refs to Sec. 4.6/4.7 (suggested labels subsec:latent_retrieval / subsec:rt_value, to be created by the methodology draft), (b) Fig.~\ref{fig:ze_geometry} in the geometry paragraph (label to be created by the Design Principles addition). Both are commented out, so the file compiles before those drafts land.
+3. Downstream-FID protocol for tab:ablation_v2_alignment / tab:ablation_v2_teacher: decide before filling whether each variant projector implies (a) a full masked-model retrain (clean but expensive) or (b) plug-in evaluation with the frozen ReMoMask-2 masked model (cheap; note that swapping phi also changes the stored R_t database embeddings, since encoded_texts.npy is a projector re-projection). If (b), add one protocol sentence to both captions.
+4. Semantic+routing row direction: prose currently assumes a small positive gain (per the dummy policy) and attributes it to the longer journal protocol without disputing the ECCV tab:ablation finding. If real numbers show semantic+routing neutral/negative, only the last sentence of the second routing paragraph needs replacing (it then STRENGTHENS the premise-changed narrative — even easier).
+5. Param counts in the sensitivity table: 0.53M (Linear 512->1024) and 3.15M (hidden 2048) are computed from the architecture incl. biases; 1.57M is from FACTS. Verify 0.53M/3.15M when the variants are actually instantiated.
+6. Symbol clash: Top-$K$ vs body-part count $K$ (tab:notation) — disambiguated in the sensitivity caption; if you prefer zero ambiguity, rename to $K_{\mathrm{KD}}$ in table + prose.
+7. TODO-CITE placeholders for Hinton-KD and InfoNCE (neither key exists in reference.bib); both are near-mandatory citations for the Alignment Objective paragraph.
+8. tab:ablation_v2_orthogonal reports FID/Top1/MMDIST only (per task spec), matching tab:ablation_ssta's column set; if reviewers ask for Diversity/MModality, columns can be appended without redesign.

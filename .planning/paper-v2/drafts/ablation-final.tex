@@ -1,0 +1,143 @@
+%============================================================
+% BLOCK 0: subsection opening (lead-in for all V2 ablations)
+% Insert as a new subsection AFTER the existing Ablation Study
+% content (after the tab:rag_ablation table block, which ends
+% ~line 1792) and BEFORE \subsection{Qualitative Results}
+% (line 1795).
+%============================================================
+\subsection{Ablation Study of ReMoMask-2}
+\label{subsec:ablation_v2}
+The ablations above isolate the contributions of HBM, TSM, and SSTA. We now ablate the two additions of the journal version: the latent-aligned retrieval space and the re-enabled value-pathway routing.
+% TODO-REF: once the methodology sections land, add \ref{} to Sec. 4.6 (latent-aligned retrieval) and Sec. 4.7 (value-pathway routing); suggested labels: subsec:latent_retrieval, subsec:rt_value.
+Unless stated otherwise, all variants share the identical backbone, masking strategy, and training configuration, and are evaluated on HumanML3D with the complete masked--residual generation pipeline under the same protocol as Table~\ref{tab:t2m_experiment}.
+
+%============================================================
+% BLOCK 1: table-orthogonal (MAIN 2x2 ablation)
+%============================================================
+\begin{table}[t]
+    \centering
+    \caption{\textbf{Orthogonal ablation of retrieval space and value-pathway routing on HumanML3D.} All four variants share the identical backbone, masking strategy, and training configuration; only the retrieval space (semantic HBM space vs.\ latent-aligned $z_e$ space) and the routing of the retrieved text embedding $R_t$ into the Value pathway vary. The first row corresponds to the conference ReMoMask configuration retrained under the journal protocol; the last row is the full ReMoMask-2.}
+    \label{tab:ablation_v2_orthogonal}
+    \renewcommand{\arraystretch}{1.3}  % Adjust the line height (global)
+    \resizebox{\columnwidth}{!}{
+        \begin{tabular}{l| c| c| c| c}
+            \toprule
+            Retrieval Space & $R_t$ in Value & FID$\downarrow$ & Top1$\uparrow$ & MMDIST$\downarrow$ \\
+            \hline
+            \hline
+            Semantic (HBM) & $\times$ & $x.xxx^{\pm.xxx}$ & $x.xxx^{\pm.xxx}$ & $x.xxx^{\pm.xxx}$ \\
+            Semantic (HBM) & $\checkmark$ & $x.xxx^{\pm.xxx}$ & $x.xxx^{\pm.xxx}$ & $x.xxx^{\pm.xxx}$ \\
+            Latent-aligned ($z_e$) & $\times$ & $x.xxx^{\pm.xxx}$ & $x.xxx^{\pm.xxx}$ & $x.xxx^{\pm.xxx}$ \\
+            \rowcolor{yellow!20} Latent-aligned ($z_e$) & $\checkmark$ & $x.xxx^{\pm.xxx}$ & $x.xxx^{\pm.xxx}$ & $x.xxx^{\pm.xxx}$ \\
+            \bottomrule
+        \end{tabular}
+    }
+\end{table}
+
+%============================================================
+% BLOCK 2: table-alignment-objective (KL vs InfoNCE)
+%============================================================
+\begin{table}[t]
+    \centering
+    \caption{Alignment objective for the query projector $\phi$ on HumanML3D. Retrieval columns report text-to-motion recall of the projected query in the $z_e$ space; FID reports downstream generation quality when the resulting projector is used in ReMoMask-2. The adopted setting is shaded.}
+    \label{tab:ablation_v2_alignment}
+    \renewcommand{\arraystretch}{1.3}  % Adjust the line height (global)
+    \resizebox{\columnwidth}{!}{
+        \begin{tabular}{l| ccc| c}
+            \toprule
+            Objective & R@1$\uparrow$ & R@5$\uparrow$ & R@10$\uparrow$ & FID$\downarrow$ \\
+            \hline
+            \hline
+            InfoNCE & xx.xx & xx.xx & xx.xx & $x.xxx^{\pm.xxx}$ \\
+            \rowcolor[gray]{0.90} KL distillation & xx.xx & xx.xx & xx.xx & $x.xxx^{\pm.xxx}$ \\
+            \bottomrule
+        \end{tabular}
+    }
+\end{table}
+
+%============================================================
+% BLOCK 3: table-teacher (HBM vs TMR teacher)
+%============================================================
+\begin{table}[t]
+    \centering
+    \caption{Choice of the distillation teacher for the query projector $\phi$ on HumanML3D. The projector is distilled from each teacher's top-256 soft targets under otherwise identical settings. The adopted setting is shaded.}
+    \label{tab:ablation_v2_teacher}
+    \renewcommand{\arraystretch}{1.3}  % Adjust the line height (global)
+    \resizebox{\columnwidth}{!}{
+        \begin{tabular}{l| ccc| c}
+            \toprule
+            Teacher & R@1$\uparrow$ & R@5$\uparrow$ & R@10$\uparrow$ & FID$\downarrow$ \\
+            \hline
+            \hline
+            TMR~\cite{tmr} & xx.xx & xx.xx & xx.xx & $x.xxx^{\pm.xxx}$ \\
+            \rowcolor[gray]{0.90} HBM & xx.xx & xx.xx & xx.xx & $x.xxx^{\pm.xxx}$ \\
+            \bottomrule
+        \end{tabular}
+    }
+\end{table}
+
+%============================================================
+% BLOCK 4: table-sensitivity (distillation Top-K + projector capacity)
+% Retrieval-level only (no FID column) to keep the sweep cheap and compact.
+%============================================================
+\begin{table}[t]
+    \centering
+    \caption{Sensitivity of the query projector to the number of distillation targets (Top-$K$; $K$ here denotes the number of teacher candidates, not body parts) and to projector capacity, measured by text-to-motion recall on HumanML3D. Default settings are shaded.}
+    \label{tab:ablation_v2_sensitivity}
+    \renewcommand{\arraystretch}{1.3}  % Adjust the line height (global)
+    \resizebox{\columnwidth}{!}{
+        \begin{tabular}{l| c| ccc}
+            \toprule
+             & \#Params & R@1$\uparrow$ & R@5$\uparrow$ & R@10$\uparrow$ \\
+            \hline
+            \hline
+            \multicolumn{5}{l}{\emph{Distillation Top-$K$}} \\
+            \hline
+            $K{=}64$ & 1.57M & xx.xx & xx.xx & xx.xx \\
+            \rowcolor[gray]{0.90} $K{=}256$ (default) & 1.57M & xx.xx & xx.xx & xx.xx \\
+            $K{=}1024$ & 1.57M & xx.xx & xx.xx & xx.xx \\
+            \hline
+            \multicolumn{5}{l}{\emph{Projector capacity}} \\
+            \hline
+            Linear ($512{\to}1024$) & 0.53M & xx.xx & xx.xx & xx.xx \\
+            \rowcolor[gray]{0.90} MLP, hidden 1024 (default) & 1.57M & xx.xx & xx.xx & xx.xx \\
+            MLP, hidden 2048 & 3.15M & xx.xx & xx.xx & xx.xx \\
+            \bottomrule
+        \end{tabular}
+    }
+\end{table}
+
+%============================================================
+% BLOCK 5: prose-analysis (dummy analysis, written as-if-expected;
+% every placeholder-dependent claim marked \textbf{[TBD]})
+%============================================================
+\noindent \myparagraph{Retrieval Space and Value Routing.}
+Table~\ref{tab:ablation_v2_orthogonal} disentangles the two journal-version factors. The retrieval space is the dominant one: switching from the semantic HBM space to the latent-aligned $z_e$ space reduces FID by \textbf{[TBD]} without routing and by \textbf{[TBD]} with routing, together with consistent gains in Top-1 R-Precision. Routing $R_t$ into the Value pathway contributes a smaller gain in both retrieval spaces (\textbf{[TBD]} and \textbf{[TBD]} FID reduction, respectively), and the two effects compose nearly additively: the full configuration ($z_e$ + routing) attains the best results across all three metrics, indicating that the two contributions are largely independent.
+
+The routing result should be read against the premise it rests on. In the conference version, $R_t$ was a text-domain signal from the contrastive semantic space, and injecting it into the Value pathway degraded quality (FID $0.104$ vs.\ $0.027$ in Table~\ref{tab:ablation}), which motivated excluding textual semantics from Value to prevent domain mismatch. In ReMoMask-2, $R_t$ is projected by $\phi$ into the motion-aligned $z_e$ space and thus enters SSTA as a motion-domain signal; the premise behind the exclusion no longer applies to it, and re-enabling the routing is accordingly beneficial, with the clearly larger gain observed in the latent-aligned rows (\textbf{[TBD]}). The modest positive effect in the semantic-space rows (\textbf{[TBD]}) suggests that the routing penalty observed at the conference operating point does not carry over unchanged to the journal re-evaluation; it does not overturn the conference finding, which isolates a semantic-space $R_t$ under the original protocol.
+
+\noindent \myparagraph{Alignment Objective.}
+Table~\ref{tab:ablation_v2_alignment} compares KL distillation with InfoNCE for training $\phi$. KL distillation yields both higher projector recall and lower downstream FID (\textbf{[TBD]}). This is consistent with the distillation view of the alignment problem: the projector does not need to learn a text--motion metric from scratch, but to reproduce, inside the $z_e$ space, the ranking of an existing stronger retriever. The top-256 soft targets convey the teacher's full similarity structure over candidates, whereas InfoNCE reduces supervision to a single positive per caption; since the database expands 23,384 motions into 66,912 (motion, caption) entries, roughly three captions per motion, a single-positive objective can treat entries of the very same motion as negatives, injecting label noise that the soft-target objective avoids.
+% TODO-CITE: Hinton et al., "Distilling the Knowledge in a Neural Network" (arXiv:1503.02531) — canonical reference for KL soft-target distillation.
+% TODO-CITE: van den Oord et al., "Representation Learning with Contrastive Predictive Coding" (arXiv:1807.03748) — original InfoNCE objective.
+
+\noindent \myparagraph{Distillation Teacher.}
+Table~\ref{tab:ablation_v2_teacher} compares distilling $\phi$ from the HBM retriever against distilling from TMR~\cite{tmr}. The HBM teacher yields better projector recall and better downstream generation (\textbf{[TBD]}). This mirrors the retrieval gap between the teachers themselves (18.49 vs.\ 5.68 text-to-motion R@1 on HumanML3D in Table~\ref{tab:rag_experiment}): since the projector learns the teacher's ranking, its quality is effectively upper-bounded by the teacher's ranking quality, and improvements to the retriever transfer directly to the latent-aligned pipeline. This also links the two versions of our system: the conference contribution (HBM) is what makes the journal contribution (latent-aligned retrieval) train well.
+
+\noindent \myparagraph{Geometry of the $z_e$ Space.}
+The measured geometry of the pooled $z_e$ embeddings explains both why latent retrieval works and why a learned projector is required. Pairwise cosine similarities average $0.62$ with a standard deviation of $0.25$ (range $[-0.55, 0.998]$)---far from collapsed---so cosine similarity remains discriminative and nearest-neighbor retrieval in $z_e$ is well-posed. At the same time, the space is severely anisotropic: only about $11$ of $1024$ dimensions are effective, and $7$ principal directions explain $95\%$ of the variance. Usable structure therefore occupies a narrow low-dimensional cone of the ambient space; a fixed or analytically constructed mapping (e.g., reusing the semantic-space text embedding directly) would spread the query's energy across mostly uninformative coordinates and destroy the ranking, whereas a projector distilled from teacher rankings learns to place queries inside precisely this cone. The same anisotropy favors ranking-level (KL) supervision over pointwise regression to motion embeddings, consistent with Table~\ref{tab:ablation_v2_alignment}.
+% TODO-REF: add Fig.~\ref{fig:ze_geometry} (cosine histogram + eigenvalue spectrum) reference here once the Design Principles addition introducing fig:ze_geometry is merged; keep this sentence out until the label exists.
+
+\noindent \myparagraph{Distillation Top-$K$ and Projector Capacity.}
+Table~\ref{tab:ablation_v2_sensitivity} probes the two main hyper-parameters of the alignment stage. Performance is stable in a broad range around the default $K{=}256$: a very small candidate set truncates the teacher's ranking signal, while a very large one dilutes it with a low-similarity tail (\textbf{[TBD]}). Increasing projector capacity beyond the default two-layer MLP brings no consistent gain (\textbf{[TBD]}), while a single linear map underfits the teacher ranking (\textbf{[TBD]}). Both trends indicate that the improvement of ReMoMask-2 stems from \emph{where} the queries are aligned---the generator's own latent space---rather than from added capacity in the alignment module.
+
+%============================================================
+% BLOCK 6: implementation-details-addition
+% Append at the END of \subsection{Implementation Details},
+% right after the sentence "All models are implemented in PyTorch."
+% (line 1548). Does not modify or contradict the existing
+% "8 Tesla A800" sentence: the V2 paragraph fixes the *configuration*,
+% not the hardware, for the controlled comparison.
+%============================================================
+\noindent \myparagraph{ReMoMask-2.}
+The $z_e$ retrieval database is constructed once from the frozen 2D-RVQ-VAE: each of the 23,384 training motions is passed through the 2D encoder, and its pre-quantization latent (1024 channels over the temporal--part grid) is mean-pooled over the temporal and part axes and $\ell_2$-normalized to form a 1024-dimensional retrieval key; expanding motions to their captions yields 66,912 (motion, caption) entries, and the full build takes about five minutes. The query projector $\phi$ is a two-layer MLP (Linear $512{\to}1024$, GELU, Linear $1024{\to}1024$; $\approx$1.57M parameters) applied to the same frozen CLIP~\cite{clip} ViT-B/32 text embedding used by the retrieval model, with $\ell_2$-normalized outputs. It is trained for 200 epochs with a batch size of 128 on a single GPU using Adam with cosine annealing, distilling the HBM retriever's top-256 soft targets at temperature $\tau = 0.07$; the VQ-VAE remains frozen throughout. On the generator side, the SSTA architecture is unchanged: the only additional parameters are two linear adapters ($1024 \to 512$) that project the retrieved $R_m$ and $R_t$ to the model dimension. For the controlled comparison in this journal version, the masked models of ReMoMask and ReMoMask-2 are trained under exactly the same configuration---identical architecture, optimization hyper-parameters, batch size, training schedule, and random seed---so that the retrieval module is the only varying factor between the two systems.

@@ -1,0 +1,50 @@
+[
+  {
+    "severity": "major",
+    "description": "Narrative-order defect in the intro-third-axis anchor: inserting between lines 724 and 726 places the full ReMoMask-2 paragraph (which names HBM, SSTA, and 'our conference framework') BEFORE the existing sentence 'In this work, we propose \\textbf{ReMoMask}' and before SSTA/TSM are introduced — the extension would be presented before the conference method it extends. The comment's promised 'notes for a suggested one-line tweak of the lead-in at 726' do not exist in the pack. FIXED: re-anchored the block to insert after the TSM/SSTA paragraph (line 731, '...richer topological dependencies across body parts and time.') and before 'Our contributions are summarized as follows:' (line 734); paragraph text unchanged, and no edit to the ECCV lead-in is needed."
+  },
+  {
+    "severity": "major",
+    "description": "Stale TODO-CITE / missing self-citation: the bib key `remomask` ALREADY exists in reference.bib (line 593: ECCV 2025, note arXiv:2508.02605), contradicting the draft's claim that the entry does not yet exist. The journal-extension sentence therefore lacked its required citation. FIXED: 'was presented at ECCV 2025~\\cite{remomask}.' and replaced the TODO comment with a resolved note."
+  },
+  {
+    "severity": "major",
+    "description": "Wrong anchor line numbers in conclusion-addition: draft says 'after the existing paragraph (line 1818), before the Acknowledgements (line 1820)', but in the current 2096-line pami.tex those lines sit at the end of fig:demo1 / just before \\section{Limitations} (1819) — an integrator following them would drop the ReMoMask-2 conclusion paragraph into the Limitations section. Actual: conclusion paragraph at line 1830, Acknowledgements at line 1832. FIXED in the anchor comment."
+  },
+  {
+    "severity": "major",
+    "description": "Wrong anchor line number in limitations-addition: draft says the sentence '...remain an important direction for future work.' is at line 1812; it is actually at line 1824 (line 1812 is inside the qualitative-results figures). FIXED in the anchor comment. (Root cause of both off-by-~12 anchors: FACTS §0 still describes pami.tex as ~1690 lines, but the current file is 2096 lines after the table edits.)"
+  },
+  {
+    "severity": "minor",
+    "description": "Style mismatch with existing axis headings: draft had '\\textbf{(3) representation consistency of the retrieval space.}' in lowercase, while the ECCV text uses '(1) Structural granularity of alignment.' / '(2) Structural compatibility of fusion.' FIXED: capitalized to '(3) Representation consistency of the retrieval space.'"
+  },
+  {
+    "severity": "minor",
+    "description": "British spelling 'neighbours' in the related-work addition, while the paper uses American spelling ('behaviors', 'colors'). FIXED to 'neighbors'. (The 'nearest-neighbour' spelling inside a TODO-CITE comment was left as-is since it never compiles.)"
+  },
+  {
+    "severity": "minor",
+    "description": "Forward references: \\ref{subsec:latent_retrieval} and \\ref{subsec:rt_value} resolve only once the forthcoming method blocks (Sec. 4.6/4.7) land; compiling the intro pack alone yields undefined references. The header already documents this dependency — no change, but do not compile/submit before the method blocks are merged. Verified no duplicate labels: subsec:latent_retrieval, subsec:rt_value, fig:ze_geometry are all absent from pami.tex."
+  },
+  {
+    "severity": "minor",
+    "description": "Known 512-vs-1024 tension (pre-existing, flagged in V2-REVISION-PLAN risk #5, deliberately NOT fixed): the design-principles addition correctly uses the 1024-dimensional z_e descriptor (ckpt fact: code_dim2d=1024), but pami.tex line 1543 still says the 2D-RVQ-VAE codebook has '512 codes of 512-dimensios' (sic, ECCV original). Both statements will coexist; a reviewer may query the inconsistency — awaiting user decision per the plan."
+  },
+  {
+    "severity": "minor",
+    "description": "Contribution item on rt_in_value asserts 're-admitting $R_t$ is beneficial (\\textbf{[TBD]})'. The only supporting evidence (FID 0.102→0.089, −13%) is a zero-cost result not yet reproduced in the full retrained pipeline, and FACTS §2 says to treat it as placeholder/pending, not a certainty. This wording is admissible under the FACTS §3 dummy-analysis convention (write as-if-confirmed with [TBD] placeholders), and the framing correctly avoids disparaging the ECCV tab:ablation result (premise-changed narrative throughout) — kept as drafted, but it must be softened to the 're-evaluation under longer training / full pipeline' fallback narrative if the orthogonal ablation does not confirm the effect."
+  },
+  {
+    "severity": "minor",
+    "description": "Dash style: the draft uses ASCII '--'/'---' while the surrounding pami.tex body mostly uses literal Unicode en/em dashes; both render identically in LaTeX. Cosmetic only, not changed."
+  },
+  {
+    "severity": "minor",
+    "description": "Abstract addition speaks of 'a third design axis' although the existing abstract frames the ECCV limitations as 'two closely related factors' (the explicit axes numbering only appears in the introduction and Table 1). Acceptable as-is since the intro establishes axes (1)/(2) before any reader reaches the numbering; not changed. Also verified the abstract addition respects the IEEE constraint of no math or citations in the abstract."
+  },
+  {
+    "severity": "minor",
+    "description": "Everything else verified clean: all seven \\cite keys used (remodiffuse, clip, remogpt, tmr, mogents, qi2025ar, remomask) exist in reference.bib; no invented keys (kNN-LM/RETRO/Blattmann correctly left as TODO-CITE comments); no notation collisions ($z_e$, $\\phi$ unused anywhere in pami.tex; $R_t$, $R_m$, SSTA usage consistent with the notation table); \\myparagraph macro exists (pami.tex line 415) and the '\\noindent \\myparagraph{...}' pattern matches house style; braces (26/26) and math-mode dollars balanced, no unclosed environments; every non-placeholder number traces to PLAN-A-FACTS (~1.57M projector params; cosine mean 0.62, std 0.25, range [−0.55, 0.998]; effective dimensionality 11/1024; 7 PCs explaining 95% variance; 1024-d pooled descriptor; ECCV 2025); 'two linear adapters', 'frozen RVQ-VAE', 'KL-based soft-ranking distillation from the HBM retriever' all match LOCKED-01..05; remaining anchors (533/535, 743/744, 744, 842/844, 983/990) verified correct against the current file."
+  }
+]

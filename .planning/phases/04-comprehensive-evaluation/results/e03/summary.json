@@ -1,0 +1,34 @@
+{
+  "database_bmm": "database",
+  "database_ze": "database_ze",
+  "same_order": false,
+  "n_unique_available": 22418,
+  "n_sample": 2000,
+  "seed": 3407,
+  "topk": [
+    1,
+    5,
+    10,
+    50
+  ],
+  "spearman_rho": {
+    "mean": 0.579872,
+    "std": 0.162369,
+    "median": 0.629894,
+    "n_nan": 0
+  },
+  "topk_overlap": {
+    "mean": {
+      "1": 0.1795,
+      "5": 0.1809,
+      "10": 0.1847,
+      "50": 0.24124
+    },
+    "std": {
+      "1": 0.38377,
+      "5": 0.211601,
+      "10": 0.176397,
+      "50": 0.135173
+    }
+  }
+}

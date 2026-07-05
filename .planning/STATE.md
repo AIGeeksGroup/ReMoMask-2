@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 2
-current_phase_name: Latent-Aligned Retrieval (Plan A)
+current_phase: 4
+current_phase_name: Comprehensive Evaluation & Paper Experiments
 status: executing
-stopped_at: "Phase 2 Wave 3 complete. Wave 4 (ablation) blocked on full training. Remote server (diana.acfr.usyd.edu.au) configured and verified."
-last_updated: "2026-06-30"
-last_activity: 2026-06-30
-last_activity_desc: "Phase 2 Wave 3 training integration complete; remote server setup + demo verified"
+stopped_at: "Phase 4 Wave 1 在飞（jobs 13885-13892，见 phases/04-*/RUNS.md）；Phase 2 训练仍在跑（提前停待拍板）；论文期刊版扩写已完成第一轮（v2working）。"
+last_updated: "2026-07-05"
+last_activity: 2026-07-05
+last_activity_desc: "论文写作启动：深读 v1 全文、表格改名+ReMoMask-2 占位行、方法/intro/消融起草中"
 progress:
   total_phases: 4
   completed_phases: 1
@@ -39,9 +39,9 @@ Progress: [███████░░░] 71%
 | Phase | Status | Summary |
 |-------|--------|---------|
 | 1. Zero-Cost Ablations | **COMPLETE** | ABL-01 CFG schedule 信号模糊; ABL-02 R_t-in-Value FID -13% ← 采纳 |
-| 2. Latent-Aligned Retrieval | **IN PROGRESS** | Wave 1-3 done (z_e分析/数据库/projector/SSTA/训练脚本); Wave 4 待完整训练 |
-| 3. Iterative Dynamic Retrieval | Not started | 依赖 Phase 2 |
-| 4. Comprehensive Evaluation | Not started | 依赖 Phase 2+3 |
+| 2. Latent-Aligned Retrieval | **训练收尾中** | 6/6 plans done;V1/V2 对照训练 ~65%,best 已定型(ep316/ep409),提前停待拍板 |
+| 3. Iterative Dynamic Retrieval | **DEFERRED** | Plan B 搁置(2026-07-05),论文仅 future work |
+| 4. Comprehensive Eval & Paper Experiments | **IN PROGRESS** | E01-E08 在飞/排队(RUNS.md);E03 ✅(ρ=0.58, overlap@10=18.5%);E09 压轴 800ep;E12/KIT/Snap 随大服务器批 |
 
 ## Phase 1 Results
 
@@ -93,11 +93,11 @@ Progress: [███████░░░] 71%
 
 ## Next Steps
 
-1. 训练完成（或提前停）后：`eval_res.py` 完整 pipeline × 20 repeats × {V1@ep316, V2@ep409} → 论文数字
-2. rt_in_value 正交消融表：{Part_TMR, z_e} × {rtval on/off}，验证 ABL-02 的 −13% 是否复现
-3. `compare_v1_v2.py` 出 comparison.json/tex + Phase 2 正式验证
-4. Phase 3 (Plan B iterative retrieval)
-5. 论文：先读透 ECCV 原文（LaTeX 工程 `_TPAMI_2026__ReMoMask_2/`）再动笔
+1. **Phase 4 已重定义并写好执行规格**:`.planning/phases/04-comprehensive-evaluation/EXPERIMENTS-SPEC.md`(E01-E11 逐条命令/gap/成本)+ 04-CONTEXT.md(wave 结构 + 4 个拍板项 D-P4-01..04);Phase 3 (Plan B) 正式 DEFERRED
+2. 训练停止(D-P4-01 拍板)→ Wave 1:E01 正式评估 + E02 mask-only + E03/E04 离线分析(E03 无前置,现在就能跑)
+3. 代码 gap G1-G9(~435 LOC,spec 内清单)可先行实现+冒烟,分发 Sonnet xhigh
+4. Phase 2 正式验证(/gsd-verify-work 2)在 E01 数字落地后跑
+5. 论文：**写作已启动（2026-07-05）**。唯一可信 LaTeX = `D:\tpami\currentversion\v2working\`（解压自 `currentversion/_TPAMI_2026__ReMoMask_2 (1).zip`；旧路径 `_TPAMI_2026__ReMoMask_2/` 作废）。写作文档：`.planning/paper-v2/`（PLAN-A-FACTS / V2-REVISION-PLAN / FIG1-DESIGN / ABLATION-DESIGN）。v1 全文已深读；表格 Ours→ReMoMask + ReMoMask-2 高亮占位行已完成；方法/intro/消融扩写进行中
 
 ## Blockers
 
@@ -105,7 +105,10 @@ Progress: [███████░░░] 71%
 
 ## Session Continuity
 
-Last session: 2026-07-05
-**完整 handoff 见: .planning/phases/02-latent-aligned-retrieval-plan-a/.continue-here.md**
-Resume with: /gsd-progress
-Monitor: ssh diana.acfr.usyd.edu.au "sacct -j 13845,13846 --format=JobID,JobName%18,State%12,Elapsed -n"
+Last session: 2026-07-05(论文扩写 + Phase 4 开工)
+**完整 handoff 见: .planning/phases/02-latent-aligned-retrieval-plan-a/.continue-here.md(顶部「傍晚更新」段)**
+**在飞实验登记: .planning/phases/04-comprehensive-evaluation/RUNS.md(新 session 必读)**
+Resume with: /gsd-progress 或 /gsd-resume-work
+Monitor(训练): ssh diana.acfr.usyd.edu.au "sacct -j 13845,13846 --format=JobID,JobName%18,State%12,Elapsed -n"
+Monitor(Phase4): ssh diana.acfr.usyd.edu.au "sacct -j 13885,13886,13887,13888,13889,13890,13891,13892 --format=JobID,JobName%14,State%12,Elapsed -n | grep -v batch"
+⚠️ 上一 session 的进程内 Monitor 不跨 session,接手后需重挂或手动轮询。

@@ -1,0 +1,38 @@
+[
+  {
+    "severity": "blocker",
+    "description": "FIXED — Fabricated training-setup claim in Block 5: 'obtained under the substantially longer full-pipeline training of the journal protocol, suggests that the routing penalty ... diminishes with training'. PLAN-A-FACTS §2 states the journal controlled comparison uses a configuration identical to V1 opt.txt (same epochs, batch 64, lr 2e-4, seed 3407) — nothing supports 'substantially longer' training; the sentence also contradicts Block 6's own 'exactly the same configuration' claim, and it edges into the forbidden framing by implying the ECCV finding was merely an artifact of shorter training. Rewrote it as a neutral re-evaluation statement ('does not carry over unchanged to the journal re-evaluation') and added the missing \\textbf{[TBD]} marker on this placeholder-dependent claim, keeping the sanctioned 'does not overturn the conference finding' close."
+  },
+  {
+    "severity": "major",
+    "description": "FIXED — Invented evaluation protocol in the Block 2 (KL vs InfoNCE) caption: 'recall of the projected query against the $z_e$ database on the test set'. The $z_e$ database contains only the 23,384 training motions (66,912 caption-expanded entries), so test-set recall against it is not well-defined, and PLAN-A-FACTS specifies no such protocol (LOCKED-03's 43.46 vs 41.86 gallery is unspecified). Softened to 'recall of the projected query in the $z_e$ space' so the caption does not pre-commit to a protocol the experiments may not match."
+  },
+  {
+    "severity": "major",
+    "description": "FIXED — Block 6: 'trained under exactly the same configuration described above' tied the V1/V2 controlled comparison to the existing Implementation Details paragraph, which says 8×A800 hardware and 'SSTA is set to have 6 layers'; per PLAN-A-FACTS the retrain pair actually runs with the V1 opt.txt config (n_layers=8) on 1×L40, so 'described above' would assert details that are false for the retrain pair. Dropped 'described above' — the load-bearing (and true) claim is only that ReMoMask and ReMoMask-2 share one identical configuration, retrieval module being the only varying factor."
+  },
+  {
+    "severity": "minor",
+    "description": "FIXED — Stale insertion-point line numbers in the guidance comments (pami.tex is now 2096 lines): the tab:rag_ablation block ends at line 1792 and \\subsection{Qualitative Results} is at line 1795 (draft said ~1780/1783); 'All models are implemented in PyTorch.' is at line 1548 (draft said 1536). Updated so the integrator does not splice the blocks at the wrong spot."
+  },
+  {
+    "severity": "minor",
+    "description": "NOT CHANGED (mitigated in draft) — Notation collision: Top-$K$ reuses $K$, which the paper's notation table (tab:notation) defines as 'Number of body parts' (K=6) and which also names the attention Key matrix in SSTA/tab:ablation. The draft's caption disclaimer '($K$ here denotes the number of teacher candidates, not body parts)' disambiguates, and FACTS/plan themselves use 'top-K(256)'; recommend picking a distinct symbol when Sec. 4.6 formally introduces the distillation objective."
+  },
+  {
+    "severity": "minor",
+    "description": "VERIFIED, NO CHANGE — Non-placeholder numbers audit: 0.104/0.027 (tab:ablation), 18.49/5.68 (tab:rag_experiment), cosine 0.62/0.25/[−0.55, 0.998], 11/1024 effective dims, 7 dims for 95% variance, 23,384 motions, 66,912 entries, ~5 min build, top-256, τ=0.07, 200 epochs, batch 128, 1.57M params all trace to PLAN-A-FACTS or pami.tex. The 0.53M and 3.15M rows in tab:ablation_v2_sensitivity are deterministic parameter counts from the stated architectures (512·1024+1024=525,312; 512·2048+2048+2048·1024+1024=3,148,800) — arithmetic-derived, not experimental placeholders, so acceptable."
+  },
+  {
+    "severity": "minor",
+    "description": "NOTED, NO CHANGE — The teacher-gap sentence cites 18.49 vs 5.68 from Table tab:rag_experiment (paper protocol), whereas the actual teacher-selection experiment in FACTS LOCKED-04 measured BMM R@1 13.76 vs TMR 5.68 under the codebase protocol. Citing the paper's own table is traceable and correct for the manuscript, but be aware the new tab:ablation_v2_teacher numbers, when filled in, will come from the projector-eval protocol and need not mirror the 18.49 figure."
+  },
+  {
+    "severity": "minor",
+    "description": "NOTED, NO CHANGE — Block 6 says the projector is 'applied to the same frozen CLIP ViT-B/32 text embedding used by the retrieval model'; the paper's retrieval text encoder is frozen CLIP plus one additional trainable transformer layer. FACTS only says the CLIP embedding is 'shared with V1', so the wording is defensible, but confirm at fill-in time whether φ consumes the raw frozen CLIP embedding or the post-trainable-layer output, and tighten if needed."
+  },
+  {
+    "severity": "minor",
+    "description": "VERIFIED CLEAN — No invented citation keys: the only \\cite calls are {tmr} and {clip}, both present in reference.bib; Hinton (soft-target distillation) and van den Oord (InfoNCE) are correctly left as TODO-CITE comments instead of guessed keys. No duplicate labels (all five new labels are absent from pami.tex); all \\ref targets exist; the fig:ze_geometry reference is properly withheld in a comment until the label lands; LaTeX is balanced (braces 0, math-mode parity even, 4 table/tabular pairs, every row matches its column spec); yellow!20 / gray 0.90 rowcolor usage matches house conventions and [table]{xcolor} is loaded."
+  }
+]

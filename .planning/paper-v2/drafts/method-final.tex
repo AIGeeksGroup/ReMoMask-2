@@ -1,0 +1,109 @@
+% ================================================================
+% TRANSITION — append at the very end of \subsection{Overview}
+% (\label{subsec:overview}), i.e., directly after the paragraph
+% ending "...semantic conditioning over 2D motion tokens."
+% (pami.tex line 1029, before the "%%%%" divider at line 1031)
+% ================================================================
+In this pipeline, retrieval operates in the contrastive semantic space constructed by HBM, whereas generation operates on the latents of a 2D RVQ-VAE---two representations learned under disjoint objectives. Sections~\ref{subsec:lar} and~\ref{subsec:vroute} present the extension that defines \textbf{ReMoMask-2}: we migrate retrieval into the generator's own pre-quantization latent space, and on this basis revisit a value-pathway routing decision of SSTA whose premise this migration changes.
+% ================================================================
+% END TRANSITION
+% ================================================================
+
+
+% ================================================================
+% NEW SUBSECTIONS — insert after \subsection{Semantic Spatial-Temporal
+% Attention} (subsec:ssta), i.e., after the "Output." paragraph
+% (line 1208) and before \section{Experiment} (line 1213).
+% ================================================================
+
+%%%%%%%%%%%%%%%%%%%
+\subsection{Latent-Aligned Retrieval}
+\label{subsec:lar}
+
+The components above enforce structural consistency along the two axes identified in Section~\ref{sec:introduction}: HBM aligns text and motion at the granularity dictated by skeletal topology, and SSTA injects retrieved evidence in a form compatible with the 2D spatial--temporal latent grid. A third axis, however, remains open. In ReMoMask---as in retrieval-augmented T2M at large~\cite{remodiffuse,remogpt,morag}---the space in which evidence is \emph{retrieved} is not the space in which motion is \emph{generated}: HBM embeds text and motion into a contrastive space $\mathcal{S} \subset \mathbb{R}^{512}$, optimized by InfoNCE to discriminate matching from non-matching pairs, whereas the masked generator operates on the latent space $\mathcal{Z}$ of the 2D RVQ-VAE, optimized purely for reconstruction. Retrieval evidence $(R_m, R_t) \in \mathcal{S}$ is therefore consumed by attention layers whose substrate lives in $\mathcal{Z}$: implicitly, the fusion modules are asked to realize a cross-space translation $\psi: \mathcal{S} \rightarrow \mathcal{Z}$, supervised only indirectly through the generation loss. Since the two spaces never interact during training, nothing constrains their geometries to agree---two motions that are close under contrastive semantics may be far apart as latent trajectories. We refer to this discrepancy as the \emph{retrieval--generation representation gap}.
+
+ReMoMask-2 removes the gap at its source: rather than translating evidence across spaces, we construct the retrieval database directly in the generator's own latent space, so that retrieved evidence arrives, by construction, in the representation the generator natively consumes.
+
+\noindent \myparagraph{Pre-Quantization Latent Keys.}
+We build retrieval keys with the frozen encoder $\mathcal{E}$ of the pretrained 2D RVQ-VAE~\cite{mogents}. Given a motion $m$, the encoder produces a pre-quantization latent grid
+\begin{equation}
+z_e = \mathcal{E}(m) \in \mathbb{R}^{d_e \times T' \times J'},
+\end{equation}
+with channel dimension $d_e = 1024$ over a downsampled grid of $T' = T/4$ temporal steps and $J' = 6$ spatial positions. We deliberately operate on the continuous latent \emph{before} residual quantization rather than on discrete token indices: the pre-quantization latent preserves the continuous geometry of the encoder space and directly supports cosine-based nearest-neighbor search, whereas quantized indices are categorical and discard within-code variation. A motion-level key is obtained by average pooling over the grid followed by $\ell_2$ normalization:
+\begin{equation}
+\bar{z}_e
+=
+\frac{\hat{z}_e}{\|\hat{z}_e\|_2},
+\qquad
+\hat{z}_e
+=
+\frac{1}{T' J'}
+\sum_{t'=1}^{T'}
+\sum_{j'=1}^{J'}
+z_e(t', j'),
+\end{equation}
+where $z_e(t', j') \in \mathbb{R}^{d_e}$ denotes the latent vector at grid position $(t', j')$. Applying this to every training motion and expanding each motion over its captions yields the database
+\begin{equation}
+\mathcal{D}
+=
+\big\{ \big( \bar{z}_e^{(j)},\, x^{(j)} \big) \big\}_{j=1}^{M},
+\qquad
+M = 66{,}912,
+\end{equation}
+covering 23{,}384 training motions; at query time, entries originating from the same motion are deduplicated so that the retrieved set contains distinct exemplars. Since keys are unit-normalized, retrieval reduces to cosine similarity over $\mathcal{D}$. The RVQ-VAE remains entirely frozen throughout---the database is a cached view of representations the generator already uses.
+
+\noindent \myparagraph{Query Projector.}
+Retrieval requires mapping a text prompt into the same key space. We instantiate this as a lightweight projector $\phi$ applied to the 512-d CLIP ViT-B/32~\cite{clip} text embedding $t$ already employed by the framework:
+\begin{equation}
+\phi(t)
+=
+\mathrm{norm}\big( W_2\, \mathrm{GELU}( W_1 t ) \big),
+\end{equation}
+where $W_1 \in \mathbb{R}^{1024 \times 512}$, $W_2 \in \mathbb{R}^{1024 \times 1024}$, and $\mathrm{norm}(\cdot)$ denotes $\ell_2$ normalization. The projector holds ${\sim}1.57$M parameters and is the \emph{only} component trained in this stage.
+
+\noindent \myparagraph{Distillation from the HBM Retriever.}
+Naively regressing $\phi(t)$ onto the paired key would supervise a single point and ignore the ranking structure that makes retrieval useful. Instead, we distill the HBM retriever of the conference version---which remains a strong cross-modal ranker---into the latent key space.
+% TODO-CITE: Hinton et al., "Distilling the Knowledge in a Neural Network" (soft-target knowledge distillation), for the distillation formulation.
+For a training caption $x$ with embedding $t$, let $\Omega(x)$ denote the $\kappa$ database entries ranked highest by the teacher ($\kappa = 256$). Teacher and student induce distributions over $\Omega(x)$ from their respective similarities at temperature $\tau = 0.07$, matching the retriever's contrastive temperature:
+\begin{equation}
+p^{\square}_j
+=
+\frac{
+    \exp\big( s^{\square}_j / \tau \big)
+}{
+    \sum_{j' \in \Omega(x)} \exp\big( s^{\square}_{j'} / \tau \big)
+},
+\qquad
+\square \in \{ \mathrm{HBM}, \phi \},
+\end{equation}
+where $s^{\mathrm{HBM}}_j$ is the teacher's text--motion similarity for entry $j$ in $\mathcal{S}$, and $s^{\phi}_j = \mathrm{sim}\big( \phi(t), \bar{z}_e^{(j)} \big)$ is the student's cosine similarity in the latent key space. The projector minimizes the KL divergence from teacher to student,
+\begin{equation}
+\mathcal{L}_{\mathrm{align}}
+=
+\mathrm{KL}\big( p^{\mathrm{HBM}} \,\|\, p^{\phi} \big)
+=
+\sum_{j \in \Omega(x)}
+p^{\mathrm{HBM}}_j
+\log
+\frac{p^{\mathrm{HBM}}_j}{p^{\phi}_j}.
+\end{equation}
+Restricting the support to the teacher's top-$\kappa$ candidates concentrates supervision on the ranking decisions that matter for retrieval, and the soft targets transfer the teacher's graded preferences rather than a single hard label. The projector is trained for 200 epochs with a batch size of 128, while the RVQ-VAE, the teacher, and the CLIP text encoder all remain frozen. In effect, distillation transfers the teacher's cross-modal ranking into the generative latent space: the resulting retriever inherits the semantic precision of HBM while returning evidence natively expressed in the generator's representation.
+
+\noindent \myparagraph{Integration with SSTA.}
+At generation time, the query $\phi(t)$ retrieves the nearest database entries by cosine similarity, and both retrieval streams are read out of the latent-aligned space: $R_m$ is the pooled key $\bar{z}_e^{(j)}$ of a retrieved entry, and $R_t = \phi(t^{(j)})$ is the projection of the CLIP embedding $t^{(j)}$ of its caption $x^{(j)}$. As both streams are $d_e$-dimensional while the generator operates at latent width $d$, we insert two linear adapters, $\mathbb{R}^{d_e} \rightarrow \mathbb{R}^{d}$, one per stream, ahead of the fusion pathways. These adapters are the only architectural addition: SSTA itself---the asymmetric Q-K-V routing of Section~\ref{subsec:ssta}, including the three-way semantic token $h_{\mathrm{sem}} = \mathrm{MLP}(\mathrm{concat}[t;\, R_t;\, R_m])$---is left unchanged. Latent-aligned retrieval is thus a plug-and-play replacement for the retrieval space, and any improvement it yields is attributable to \emph{where} the evidence lives, not to additional fusion capacity.
+
+%%%%%%%%%%%%%%%%%%%
+\subsection{Revisiting Value-Pathway Routing}
+\label{subsec:vroute}
+
+The conference version routes retrieval evidence asymmetrically through SSTA: the semantic token $h_{\mathrm{sem}}$, carrying $t$, $R_t$, and $R_m$, modulates the Key, while the Value admits only motion-domain content, $V = W_v \cdot \mathrm{concat}(z, R_m)$. Textual signals were deliberately excluded from the Value pathway because, in that design, $R_t$ is an embedding in the contrastive semantic space $\mathcal{S}$: injecting a cross-domain vector into the pathway that directly synthesizes motion content risks contaminating the output with non-motion statistics, and the information-source ablation (Table~\ref{tab:ablation}) confirmed that admitting the semantic-space $R_t$ into the Value degrades fidelity. Under that premise, the routing embodies a sound principle---\emph{Value content should stay in the motion domain}.
+
+Latent alignment changes the premise, not the principle. In ReMoMask-2, $R_t = \phi(t^{(j)})$ is distilled into the $z_e$-aligned key space: it is no longer a foreign semantic vector but the caption's projection onto the generator's own latent geometry---in effect, a text-anchored motion prior. The domain-mismatch rationale for excluding $R_t$ from the Value therefore no longer applies to it, and we re-open the routing accordingly:
+\begin{equation}
+V = W_v \cdot
+\mathrm{concat}\!\left(z,\; R_m,\; R_t\right),
+\end{equation}
+at zero architectural cost: $R_m$ continues to supply exemplar dynamics from a specific retrieved motion, while $R_t$ contributes a smoother, caption-conditioned estimate of where in latent space the described motion should lie. The Query and Key pathways are unchanged, and the prompt embedding $t$---which still resides in the CLIP semantic space---remains excluded from the Value: the criterion that the Value pathway admit only motion-domain signals is preserved, and what has changed is that, after latent alignment, $R_t$ satisfies it.
+
+We treat this routing update as an independent, minor contribution, orthogonal to latent-aligned retrieval itself. Because it re-examines a conclusion of the conference ablation under a changed premise, we verify it explicitly in Section~\ref{sec:experiment} with a $2{\times}2$ ablation that crosses the retrieval space (semantic vs.\ latent-aligned) with the routing (with vs.\ without $R_t$ in the Value); enabling the route under latent-aligned retrieval improves FID by \textbf{[TBD]}.
+% NOTE: once the V2 orthogonal-ablation table exists, replace the Sec.~\ref{sec:experiment} pointer above with a direct Table~\ref{...} reference.

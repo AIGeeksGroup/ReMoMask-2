@@ -13,8 +13,8 @@ ReMoMask V2 将检索增强动作生成（RAG-T2M）的检索空间从独立的 
 
 - [x] **Phase 1: Zero-Cost Ablations** - V1 上验证 RAG-CFG schedule 和 SSTA Value 分支假设（~30 LOC）
 - [x] **Phase 2: Latent-Aligned Retrieval (Plan A)** - z_e 空间检索替换 Part_TMR，实现检索-生成空间统一（~200 LOC） (completed 2026-06-30)
-- [ ] **Phase 3: Iterative Dynamic Retrieval (Plan B)** - 50% 时定点精检索 + 训练模拟（~150 LOC）
-- [ ] **Phase 4: Comprehensive Evaluation** - 2x2 消融矩阵 + 三数据集完整评估 + 结果归档
+- [ ] **Phase 3: Iterative Dynamic Retrieval (Plan B)** — **DEFERRED(2026-07-05 用户决定搁置,论文仅 future work 提及;不阻塞 Phase 4)**
+- [ ] **Phase 4: Comprehensive Evaluation & Paper Experiments** - 论文全部占位符的数据生产:正式对照评估 + V2 消融全家桶(E01-E11)+ 图资产;详见 `.planning/phases/04-comprehensive-evaluation/EXPERIMENTS-SPEC.md`
 
 ## Phase Details
 
@@ -71,19 +71,31 @@ Plans:
 **Plans**: TBD
 **Estimated effort**: ~150 LOC, medium complexity
 
-### Phase 4: Comprehensive Evaluation
+### Phase 4: Comprehensive Evaluation & Paper Experiments(2026-07-05 重定义)
 
-**Goal**: 完成 2x2 消融矩阵的全部四组配置评估，并在三数据集上跑完整 20 次重复评估，输出可直接用于论文的实验结果
-**Depends on**: Phase 2, Phase 3
-**Requirements**: COMB-01, COMB-02
+**Goal**: 生产论文(currentversion/v2working/pami.tex)全部 45 处占位符的数据:V1/V2 正式对照评估、重定义 2×2 正交消融({Part_TMR, z_e} × {rt_in_value off/on})、候选扩充实验 E03-E08/E10、图资产;逐实验规格见 `04-comprehensive-evaluation/EXPERIMENTS-SPEC.md`
+**Depends on**: Phase 2(训练停止);Phase 3 已 DEFERRED,不再是依赖
+**Requirements**: COMB-01, COMB-02(重解释为 E01/E09), EV-01..EV-08(对应 E03-E10)
 **Success Criteria** (what must be TRUE):
 
-  1. 2x2 消融矩阵四组配置（Part_TMR/z_e x 静态/动态）全部在 HumanML3D 上评估完成，FID/R-Precision/MM-Dist 数值齐全
-  2. 三数据集（HumanML3D + KIT-ML + SnapMoGen）完整评估完成，每组 20 次重复，均值和标准差已计算
-  3. 最优配置（预期为 z_e + 动态）的 FID 优于 V1 Part_TMR 基线
+  1. E01:eval_res.py × 20 repeats × {V1@ep0316, V2@ep0409} 完成,comparison.json/tex 产出,主表 HumanML3D 行回填
+  2. E09:2×2 正交消融四格齐(补训 Semantic✗ / z_e✗ 两格),tab:ablation_v2_orthogonal 回填
+  3. E02-E08、E10 按 spec 完成,对应消融表/图回填;PLACEHOLDERS.md 相应条目清账
+  4. pami.tex 重编译零错误,数字与 results/phase4/ 产出物一致(verifier 检查项)
+  5. KIT-ML/SnapMoGen(04-07)按 D-P4-02 拍板结果执行或从主表移除对应占位行
 
-**Plans**: TBD
-**Estimated effort**: 主要是训练/评估时间，代码改动极少
+**Plans**(wave 结构见 04-CONTEXT.md):
+
+- [ ] 04-01 — E01 正式评估 + E02 mask-only 诊断(Wave 1)
+- [ ] 04-02 — E03 秩相关 + E04 z_q 对照(Wave 1,离线,无训练前置)
+- [ ] 04-03 — E05 top-k + E06 coverage-V2 + E07 效率(Wave 1)
+- [ ] 04-04 — E08 projector 变体消融(Wave 2)
+- [ ] 04-05 — E09 2×2 补两格训练(Wave 3,等 D-P4-03)
+- [ ] 04-06 — E10 定性可视化 + 图资产(Wave 4)
+- [ ] 04-07 — KIT-ML/SnapMoGen 扩展(已拍板:延后,随换大服务器的长训批执行)
+- [ ] 04-08 — E12 rtrans 完整重训(条件性,与 04-07 同期;rtrans 与检索无关,一次重训全配置共享,见 EXPERIMENTS-SPEC E12)
+
+**Estimated effort**: 代码 gap 共 9 项 ~435 LOC(可分发 Sonnet xhigh);算力大头 = E09 两格训练(~2.7 天并行)与 04-07(未定)
 
 ## Progress
 

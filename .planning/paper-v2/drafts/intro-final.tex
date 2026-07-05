@@ -1,0 +1,114 @@
+% ============================================================================
+% ReMoMask-2 TPAMI extension — INTRO PACK (draft, all numbers placeholder)
+% All \cite keys verified against reference.bib; new refs marked % TODO-CITE.
+% New labels introduced here (must match the forthcoming method blocks):
+%   subsec:latent_retrieval  (new Sec. 4.6, Latent-Aligned Retrieval)
+%   subsec:rt_value          (new Sec. 4.7, Revisiting Value-Pathway Routing)
+%   fig:ze_geometry          (commented figure, fig/ze_geometry.pdf)
+% ============================================================================
+
+
+% ===== BLOCK: abstract-addition =====
+% Anchor: append at the end of the abstract text (line 533), immediately before
+% "\end{abstract}" (line 535).
+This article extends ReMoMask along a third design axis: the representation consistency between the retrieval space and the generative latent space. In ReMoMask, as in prior RAG-T2M systems, retrieval operates in a contrastively learned semantic space that is decoupled from the RVQ-VAE latents on which the generator operates, so retrieved evidence must cross a representation gap before it can condition generation. We therefore present ReMoMask-2, which builds the retrieval database directly in the generator's pre-quantization latent space and aligns text queries to it with a lightweight projector distilled from the HBM retriever; with the generative architecture unchanged, ReMoMask-2 consistently improves generation quality over ReMoMask, reducing FID on HumanML3D by \textbf{[TBD]}\%.
+% --- Variant (optional, minimal rewrite of the sentence that introduces ReMoMask) ---
+% The literal opening sentence ("Retrieval-Augmented Text-to-Motion (RAG-T2M)
+% models have demonstrated ...") needs no change. If the editors prefer the two
+% models to be announced together, replace
+%   "In this work, we present ReMoMask, a structure-aware RAG framework for
+%    text-to-motion generation that addresses these limitations."
+% with
+%   "In this work, we present ReMoMask, a structure-aware RAG framework for
+%    text-to-motion generation that addresses these limitations, together with
+%    its extension ReMoMask-2, which further aligns the retrieval space with
+%    the generative latent space."
+% ===== END BLOCK =====
+
+
+% ===== BLOCK: intro-third-axis =====
+% Anchor: insert after the paragraph ending "...allowing the network to learn
+% richer topological dependencies across body parts and time." (line 731) and
+% before "Our contributions are summarized as follows:" (line 734), so that
+% ReMoMask-2 is introduced only after ReMoMask, HBM, and SSTA have been
+% presented. Do NOT insert at line 724/726: that would describe ReMoMask-2
+% before "In this work, we propose \textbf{ReMoMask}" introduces ReMoMask.
+Beyond these two axes, a third design dimension has so far remained implicit: \textbf{(3) Representation consistency of the retrieval space.} Existing RAG-T2M systems retrieve in an embedding space that is decoupled from the space in which generation actually takes place. ReMoDiffuse~\cite{remodiffuse} retrieves via text--text similarity in the CLIP space~\cite{clip}, while cross-modal retrievers such as ReMoGPT~\cite{remogpt}---and the HBM retriever of our conference version---operate in a contrastively learned text--motion semantic space. The generator, in contrast, manipulates the latents of its own RVQ-VAE. Retrieved evidence must therefore cross a \emph{representation gap} before it can condition generation: exemplars that are close in the retrieval space need not be close in the space the generator synthesizes in, and the fusion module has to translate between the two representations implicitly.
+
+In this article, we extend our conference framework along this third axis and present \textbf{ReMoMask-2}. Instead of retrieving in a separate semantic space, ReMoMask-2 builds its retrieval database directly in the generator's pre-quantization latent space $z_e$: motions are encoded by the frozen RVQ-VAE encoder, and text queries are mapped into the same space by a lightweight query projector $\phi$ ($\sim$1.57M parameters) trained by knowledge distillation from the HBM retriever. Retrieved evidence and the generative substrate thus share a single representation, and the SSTA fusion module is reused unchanged up to two linear adapters. Latent alignment also changes the premise of a design decision made in the conference version: once the retrieved text embedding $R_t$ is projected into the motion-aligned space, it is no longer a cross-domain signal, which re-opens the question of whether it should enter the Value pathway of SSTA (Section~\ref{subsec:rt_value}).
+% ===== END BLOCK =====
+
+
+% ===== BLOCK: contributions-additions =====
+% Anchor: append inside the \begin{itemize} of the contribution list, after the
+% fourth (last) existing \item (line 743), before \end{itemize} (line 744).
+% The existing four items remain untouched.
+    \item We identify a third structural design axis in retrieval-augmented motion generation---\emph{representation consistency between the retrieval space and the generative latent space}---and show that in existing RAG-T2M systems, including our conference version, retrieved evidence lives in a space decoupled from the latents the generator manipulates.
+
+    \item We present \textbf{ReMoMask-2}, a latent-aligned retrieval framework that builds the retrieval database in the pre-quantization latent space $z_e$ of the frozen RVQ-VAE and maps text queries into the same space with a lightweight projector $\phi$ distilled from the HBM retriever via KL-based soft-ranking supervision. The generative backbone and SSTA remain architecturally unchanged up to two linear adapters, and generation quality improves consistently over ReMoMask (\textbf{[TBD]} FID reduction on HumanML3D).
+
+    \item As an orthogonal minor contribution, we revisit the value-pathway routing of SSTA: once $R_t$ is projected into the motion-aligned latent space, the domain-mismatch premise for excluding textual evidence from the Value pathway no longer applies, and re-admitting $R_t$ is beneficial (\textbf{[TBD]}). We further contribute a geometric analysis of the $z_e$ space, new orthogonal ablations over retriever and routing choices, and full-pipeline evaluations of ReMoMask-2 under a strictly controlled training protocol.
+% ===== END BLOCK =====
+
+
+% ===== BLOCK: journal-extension-statement =====
+% Anchor: new paragraph at the end of Section 1, immediately after
+% \end{itemize} of the contribution list (line 744).
+A preliminary version of this work, ReMoMask, was presented at ECCV 2025~\cite{remomask}.
+% Self-citation resolved: bib key `remomask` already exists in reference.bib
+% (ECCV 2025; note arXiv:2508.02605).
+This paper extends our conference version in the following aspects. (i)~We introduce a latent-aligned retrieval framework (Section~\ref{subsec:latent_retrieval}) that rebuilds the retrieval database in the pre-quantization latent space $z_e$ of the generator's frozen RVQ-VAE and aligns text queries to it with a lightweight projector distilled from the HBM retriever, so that retrieval and generation share a single representation. (ii)~We revisit the value-pathway routing of SSTA (Section~\ref{subsec:rt_value}): latent alignment turns the retrieved text embedding $R_t$ into a motion-domain signal, changing the premise under which the conference version excluded textual evidence from the Value pathway. (iii)~We provide a geometric analysis of the $z_e$ space (Section~\ref{sec:preliminary}) that establishes the feasibility of latent-space retrieval and grounds the third design axis. (iv)~We add new orthogonal ablations (retriever type $\times$ value routing, alignment objective, and teacher choice) and a full-pipeline evaluation of ReMoMask-2 against ReMoMask under an identical training configuration, while retaining all conference results.
+% ===== END BLOCK =====
+
+
+% ===== BLOCK: relatedwork-addition =====
+% Anchor: end of \subsection{Retrieval-Augmented Text-to-Motion}, after the
+% paragraph ending "...remains largely uninvestigated." (line 842), before the
+% commented-out legacy text (line 844).
+A trait common to these systems---and to the conference version of this work---is that the retrieval space is decoupled from the generative representation: queries and keys live in the CLIP text space~\cite{clip,remodiffuse} or in a contrastively learned text--motion embedding space~\cite{tmr,remogpt}, whereas the generator operates on the latents of its own RVQ-VAE, so retrieved exemplars must be translated across representations at fusion time. In other modalities, retrieving directly in the generative model's own representation space has proven effective; for example, AR-RAG~\cite{qi2025ar} retrieves patch-level visual tokens during autoregressive image generation, and language models have been augmented with neighbors retrieved in their own embedding spaces.
+% TODO-CITE: kNN-LM (Khandelwal et al., ICLR 2020) and RETRO (Borgeaud et al.,
+% ICML 2022) — retrieval keyed on the language model's own representations.
+% TODO-CITE: retrieval-augmented diffusion models (Blattmann et al., NeurIPS
+% 2022) — nearest-neighbour conditioning for image synthesis in a learned
+% feature space.
+In Section~\ref{subsec:latent_retrieval} we transfer this principle to motion generation: ReMoMask-2 builds its retrieval database in the generator's pre-quantization latent space, eliminating the representation gap between retrieval and generation.
+% ===== END BLOCK =====
+
+
+% ===== BLOCK: design-principles-addition =====
+% Anchor: end of Section~\ref{sec:preliminary} (Design Principles), after the
+% paragraph ending "...structure-aware cross-attention over a 2D latent grid."
+% (line 983), before \section{Methodology} (line 990).
+\noindent \myparagraph{Representation Consistency of the Retrieval Space.}
+The two axes above concern how retrieval is aligned and how retrieved evidence is fused; both presuppose that retrieval operates in a semantic space separate from the generator. A third question is whether the generator's \emph{own} latent space can serve as the retrieval space, so that retrieved evidence and the generative substrate share a single representation. To assess feasibility, we analyze the geometry of the pre-quantization latents $z_e$ produced by the frozen 2D-RVQ-VAE encoder~\cite{mogents}: each training motion is mean-pooled over its spatial--temporal grid and $\ell_2$-normalized, yielding one 1024-dimensional descriptor. Two findings emerge. First, the space does not collapse: pairwise cosine similarities average $0.62$ (std $0.25$, range $[-0.55, 0.998]$), leaving sufficient spread for discriminative cosine-based retrieval. Second, the space is strongly anisotropic: its effective dimensionality is only $11$ out of $1024$, and $7$ principal directions already explain $95\%$ of the variance. Latent-space retrieval is therefore feasible, but the geometry of $z_e$ differs markedly from that of contrastively learned semantic spaces, so text queries cannot be mapped into it heuristically. These observations ground a third design axis---\emph{representation consistency between the retrieval space and the generative latent space}---which we instantiate with the latent-aligned retrieval framework of Section~\ref{subsec:latent_retrieval}.
+
+% Optional figure (enable once fig/ze_geometry.pdf is redrawn as vector art from
+% cosine_sim_hist.png + eigenvalue_spectrum.png). When enabling, add
+% "(Fig.~\ref{fig:ze_geometry})" after "Two findings emerge" in the paragraph
+% above.
+% \begin{figure}[t]
+%     \centering
+%     \includegraphics[width=\linewidth]{fig/ze_geometry.pdf}
+%     \caption{\textbf{Geometry of the pre-quantization latent space $z_e$ on
+%     HumanML3D.} Left: histogram of pairwise cosine similarities between pooled
+%     motion latents (mean $0.62$, std $0.25$); the embeddings do not collapse.
+%     Right: eigenvalue spectrum of the latent covariance; $7$ principal
+%     directions explain $95\%$ of the variance and the effective dimensionality
+%     is $11/1024$, indicating strong anisotropy.}
+%     \label{fig:ze_geometry}
+% \end{figure}
+% ===== END BLOCK =====
+
+
+% ===== BLOCK: conclusion-addition =====
+% Anchor: new paragraph in \section{Conclusion}, after the existing paragraph
+% (line 1830), before the Acknowledgements (line 1832).
+This article further extends ReMoMask along a third design axis, the representation consistency between the retrieval space and the generative latent space. The resulting ReMoMask-2 builds its retrieval database in the pre-quantization latent space $z_e$ of the frozen RVQ-VAE and maps text queries into the same space with a lightweight projector distilled from the HBM retriever, so that retrieved evidence and the generative substrate share a single representation. Latent alignment in turn changes the premise of the conference-version value-pathway design: the retrieved text embedding $R_t$ becomes a motion-domain signal and can be re-admitted into the Value pathway of SSTA. With the generative architecture otherwise unchanged, ReMoMask-2 improves generation quality over ReMoMask by \textbf{[TBD]} on HumanML3D, extending structural consistency from alignment and fusion to the underlying representation itself.
+% ===== END BLOCK =====
+
+
+% ===== BLOCK: limitations-addition =====
+% Anchor: append at the end of \section{Limitations}, after "...remain an
+% important direction for future work." (line 1824).
+In addition, the pre-quantization latent space $z_e$ is strongly anisotropic---only about $11$ of its $1024$ dimensions are effective---which may bound the discriminability of cosine-based latent retrieval. Moreover, because the query projector is trained by distillation, its retrieval quality is inherently limited by the HBM teacher. Finally, retrieval in ReMoMask-2 is performed once per prompt before generation; interleaving retrieval with the iterative unmasking schedule (dynamic retrieval) is a promising direction for future work.
+% ===== END BLOCK =====
