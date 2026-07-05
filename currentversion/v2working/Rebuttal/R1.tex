@@ -1,0 +1,74 @@
+\reviewersection
+
+\noindent \textbf{To R1 Q1:} \textit{Title: ``image generation'' $\longrightarrow$ ``semantic/semantic-guided image generation'' as they are different tasks.}
+
+\hao{Yes, these two are different. This paper focuses on ``semantic-guided/aware image generation'', but ``semantic-aware'' is already included in the title, so in order to avoid repetition, we simplified the title to ``image generation''.
+}
+
+\noindent \textbf{To R1 Q2:} \textit{Organization and Length: the application part (section 4.2.3) makes little sense to me as it does not show anything new or superior. The experiment part is too long and some of them can be moved into the supplementary materials.}
+
+\hao{We have moved the content of section 4.2.3 to the appendices.}
+
+\noindent \textbf{To R1 Q3:} \textit{Readability: the presentation of the manuscript is okay but far from great. A lot of effort is paid in describing the components of the proposed techniques but there is little discussion/reasoning on their motivations (e.g. section 3.2). In other words, there is a significant gap between very high-level intuitions and detailed implementations in the current presentation, which makes it difficult to understand. I suggest thorough rework the writing, especially section 3.2.
+}
+
+\hao{Other reviewers \textbf{R2}, \textbf{R3}, and \textbf{R4} think our paper is well written and very easy to read, especially for section 3.2.}
+
+\noindent \textbf{To R1 Q4:} \textit{Missing references:
+[1] Zhu, P., Abdal, R., Qin, Y. and Wonka, P., 2020. Sean: Image synthesis with semantic region-adaptive normalization. CVPR2020.
+[2] Zhu, Z., Xu, Z., You, A. and Bai, X., 2020. Semantically multi-modal image synthesis. CVPR2020.
+[3] Richardson, E., Alaluf, Y., Patashnik, O., Nitzan, Y., Azar, Y., Shapiro, S. and Cohen-Or, D. Encoding in style: a stylegan encoder for image-to-image translation. CVPR2021.
+}
+
+\hao{We have cited these three works in our paper.}
+
+\noindent \textbf{To R1 Q5:} \textit{No comparison with more advanced state-of-the-art, e.g. missing references [1] and [2]. These should be included in the evaluation.
+}
+
+\hao{Both [1] and [2] use a different way to do evaluation. 
+For instance, results of SPADE on Cityscapes are 62.3 mIoU, 81.9 accu, and 71.8 FID, but the paper [1] reports 57.88 mIoU, 93.59 accu and 50.38 FID, respectively. 
+Results of SPADE paper on ADE20K are 38.5 mIoU and 79.9 acc, but the paper [2] reports 42.0 mIoU and 81.4 acc.
+For more details about [1], please refer to this github issue \url{https://github.com/ZPdesu/SEAN/issues/8}. 
+For more details about [2], please refer to this github issue \url{https://github.com/Seanseattle/SMIS/issues/6}. \\
+\indent Thus, for a fair comparison, we adopt the same training/test dataset split, model hyper-parameters (e.g., the number of training epoches), and evaluation method of ours.
+We have added the results of [2] (i.e., SMIS) in Table 5 and Figure 11(a) and Figure 11(b).
+We have added the results of [1] (i.e., SEAN) in Table 5 and Figure 11(c).
+}
+
+\noindent \textbf{To R1 Q6:} \textit{The motivation of SAU is not convincing. The environment can also have an impact on object appearance (e.g. lighting and shadow). So why exclude them from the strategy?
+}
+
+\hao{This is a common problem of semantic image synthesis methods. The segmentation map can only provide the shape and structure information of the object, and cannot provide both lighting and shadow information.}
+
+\noindent \textbf{To R1 Q7:} \textit{How are the filtered feature maps in Fig.6 visualized? What do the colors mean?
+}
+
+\hao{As indicated in page 11, we randomly plot some channels from the learned class-specific feature maps (30th to 32th, and 50th to 52th) on Cityscapes to see if they clearly highlight particular semantic classes.
+Different colors mean different classes such as road, vegetation, and cars. We can easily observe that each local subgenerator effectively learns the deep class-level representations, further confirming our motivations.}
+
+
+\noindent \textbf{To R1 Q8:} \textit{Section 3.2.1, How is the ``feature shuffle'' performed exactly? How are the $k^2s^2 \times H \times W$ rearranged to $k^2 \times Hs \times Ws$? Along which dimension?
+}
+
+\hao{Feature shuffle is a variant of pixel shuffle, performed on feature maps. Pixel shuffle layer is one of the most recent layer types introduced in modern deep learning Neural Networks. Its application is closely related to the single-image super-resolution (SISR) research, i.e., the technique ensemble whose aim is to produce a high-resolution image from a single low-resolution one. For more details about the pixel shuffle layer, please refer to 
+Figure 1 of the reference \cite{shi2016real}.}
+
+\noindent \textbf{To R1 Q9:} \textit{If SAU aims to use information from the same class, why not take the semantic mask as an input? If it is learned, why it favors pixels from the same class?
+}
+
+\hao{The task of semantic image synthesis is to input a semantic mask, and then output a photo-realistic image. So our model uses a semantic mask as input. However, the existing upsampling methods such as deconvolution, pixel shuffle, and spatial attention cannot well maintain the semantic information between the same class, so we propose the SAU to alleviate this problem.}
+
+\noindent \textbf{To R1 Q10:} \textit{For SAU, if there is still a kernel of size k, how can it represent long-range pixels in same class?
+}
+
+\hao{This kernel of size $k$ is to balance performance and efficiency. We can set $k$ to be larger, which can capture pixels with longer distances between the same class, but at the same time increase the training time.}
+
+\noindent \textbf{To R1 Q11:} \textit{I do not understand Fig. 5.
+}
+
+\hao{Please refer to section 3.2.3 for more details. Moreover, \textbf{R2} thinks Figure 5 is highly interesting.}
+
+\noindent \textbf{To R1 Q12:} \textit{Fig. 12, how are the feature maps visualized? What do the colors mean?
+}
+
+\hao{See \textbf{R1 Q7} for more details.}

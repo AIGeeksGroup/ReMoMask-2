@@ -1,0 +1,83 @@
+% LaTeX rebuttal letter example. 
+% 
+% Copyright 2019 Friedemann Zenke, fzenke.net
+%
+% Based on examples by Dirk Eddelbuettel, Fran and others from 
+% https://tex.stackexchange.com/questions/2317/latex-style-or-macro-for-detailed-response-to-referee-report
+% 
+% Licensed under cc by-sa 3.0 with attribution required.
+% See https://creativecommons.org/licenses/by-sa/3.0/
+% and https://stackoverflow.blog/2009/06/25/attribution-required/
+
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{lipsum} % to generate some filler text
+\usepackage{fullpage}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[pagebackref=true,breaklinks=true,letterpaper=true,colorlinks,bookmarks=false]{hyperref}
+\newcommand{\hao}[1]{\textcolor{blue}{#1}}
+\newcommand{\nicu}[1]{\textcolor{red}{#1}}
+% import Eq and Section references from the main manuscript where needed
+% \usepackage{xr}
+% \externaldocument{manuscript}
+
+% package needed for optional arguments
+\usepackage{xifthen}
+% define counters for reviewers and their points
+\newcounter{reviewer}
+\setcounter{reviewer}{0}
+\newcounter{point}[reviewer]
+\setcounter{point}{0}
+
+% This refines the format of how the reviewer/point reference will appear.
+\renewcommand{\thepoint}{P\,\thereviewer.\arabic{point}} 
+
+% command declarations for reviewer points and our responses
+\newcommand{\reviewersection}{\stepcounter{reviewer} \bigskip \hrule
+                  \section*{Reviewer \thereviewer}}
+
+\newenvironment{point}
+   {\refstepcounter{point} \bigskip \noindent {\textbf{Reviewer~Point~\thepoint} } ---\ }
+   {\par }
+
+\newcommand{\shortpoint}[1]{\refstepcounter{point}  \bigskip \noindent 
+	{\textbf{Reviewer~Point~\thepoint} } ---~#1\par }
+
+\newenvironment{reply}
+   {\medskip \noindent \begin{sf}\textbf{Reply}:\  }
+   {\medskip \end{sf}}
+
+\newcommand{\shortreply}[2][]{\medskip \noindent \begin{sf}\textbf{Reply}:\  #2
+	\ifthenelse{\equal{#1}{}}{}{ \hfill \footnotesize (#1)}%
+	\medskip \end{sf}}
+
+\begin{document}
+
+\begin{center}
+	\LARGE{
+\textbf{paper title\\ 
+(-Summary of Changes-)}
+}
+\end{center}
+
+We would like to thank the reviewers for providing constructive comments. 
+We are pleased that they find our paper to be well-written and easy to follow and understand (\textbf{R2}, \textbf{R3}, \textbf{R4}). 
+We are encouraged that they find our motivation and idea to be meaningful (\textbf{R2}, \textbf{R3}, \textbf{R4}), clear (\textbf{R2}, \textbf{R3}, \textbf{R4}), and novel (\textbf{R2}, \textbf{R3}, \textbf{R4}).
+
+We have carefully addressed each comment below.
+% Note that we have also provided the revised paper with blue marks to highlight our changes for your convenience.
+The modified parts in the manuscript have been highlighted in blue.
+
+\input{R1}
+\input{R2}
+\input{R3}
+\input{R4}
+
+\bibliographystyle{IEEEtran}
+\bibliography{ref_r}
+
+\end{document}
+
+
