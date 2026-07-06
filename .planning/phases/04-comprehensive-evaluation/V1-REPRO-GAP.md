@@ -126,7 +126,9 @@ rtrans 与 mtrans 唯一耦合点 = eval_res.py 完整推理(:712,mtrans 生成 
 **E00 final(13909,官方 mtrans ep616 + 官方 rtrans ep217,完整 pipeline ×20,我们协议)**:
 **FID 0.123±0.003** | Top1/2/3 0.485/0.676/0.777 | Matching 3.090±0.008 | Div 9.357 | **MMod 1.446±0.045**
 
-**H1 结论(推断性,证据链闭合)**:published 0.026/0.566/2.835 与 released ckpt 在一致协议下的实测(0.123/0.485/1.446)系统性不符;0.026 恰落于该 codebase 三条 FID 输出路径中唯一匹配的 GT-base 宇宙(rtrans ckpt 内录 0.02211,一作训练日志 0.0221-0.0296);MMod 双机佐证(我们链 1.446,一作自己机器 1.332)排除环境解释。**加上 DIFF-AUDIT.md 的权重法证(pristine 代码无法加载官方 ckpt、"官方代码参照系"不存在、我们的链是唯一与 released 权重结构一致的链),H1 以现有证据判定成立;表述纪律照 §3.86(不指控,诚实口径差异框架)。**
+**E0c 补测(13931,GT-base 诊断口径 ×20,同链,2026-07-06 深夜)**:**FID 0.0235±0.0005**(20 次分布 0.0208-0.0260)。**三宇宙同链实测三角闭合:mask-only 0.143 / full 0.123 / GT-base 0.0235 —— published 0.026±0.002 唯一匹配 GT-base 带**。H1 自此从推断升级为**实测**。同时验证(MoMask 官方库 eval_t2m.py:550 对照):GT-base 诊断函数为 MoMask 原样继承,两 codebase 同款;MoMask 论文 0.045 取自完整 pipeline 口径,ReMoMask camera-ready 0.026 与诊断口径吻合——支持"继承代码中的口径混淆"解释,与无造假先验一致。
+
+**H1 结论(实测,证据链闭合)**:published 0.026/0.566/2.835 与 released ckpt 在一致协议下的实测(0.123/0.485/1.446)系统性不符;0.026 恰落于该 codebase 三条 FID 输出路径中唯一匹配的 GT-base 宇宙(rtrans ckpt 内录 0.02211,一作训练日志 0.0221-0.0296);MMod 双机佐证(我们链 1.446,一作自己机器 1.332)排除环境解释。**加上 DIFF-AUDIT.md 的权重法证(pristine 代码无法加载官方 ckpt、"官方代码参照系"不存在、我们的链是唯一与 released 权重结构一致的链),H1 以现有证据判定成立;表述纪律照 §3.86(不指控,诚实口径差异框架)。**
 
 **权重法证三大新事实(全文见 DIFF-AUDIT.md)**:①官方 mtrans ckpt 的 SSTA 键名与我们的 semantics_modulated.py 逐键一致、与 pristine 完全不一致;②官方 ckpt 的 cond_emb 与 seqTransEncoder2/3 处于未训练初始化状态(与我们代码的跳过/注释选择精确对齐),rtrans 侧对应模块已训练(我们也保留);③官方 opt.txt 含 pristine 不存在的 train_split 字段。**D4 正式关闭**(TMR 权重 md5 同源、加载 MISSING=0、编码数学与 pristine 意图相同)。E00/E01/E02 数字全部有效。
 
