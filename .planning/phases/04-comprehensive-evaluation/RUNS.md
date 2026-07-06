@@ -26,15 +26,18 @@
 - **13906/13907 resume 进度**:ep~1698/1700,session best 0.271/0.233(tracker 已重置,非全局 best);轨迹远离最优,如期不会刷新 0.1273/0.0991。
 - 磁盘警戒:/home 97%(余 210G)。
 
-### 当前在飞(2026-07-06 深夜)
-| Job | 内容 | 节点 |
-|---|---|---|
-| 13909 | E00 官方 full ×20(10/20) | hades L4 |
-| 13906/13907 | V1/V2 resume → 2000ep | persephone ×2 |
-| 13916 | v1_orig_single(D2+D3 归因,800ep) | persephone |
-| 13917 | v1_lowlr T1(噪声地板,800ep) | persephone |
-| 13918 | E00b 官方 mask ×20 | hades L4 |
-| 13919 | encoded_texts.npy 恢复(CPU) | any |
+### 当前在飞(2026-07-06 深夜;goal = 复现差异归因,见 GOAL.md)
+| Job | 内容 | 节点 | 状态 |
+|---|---|---|---|
+| 13909 | E00 官方 full ×20(H1 裁决) | hades L4 | RUNNING 2.5h+ |
+| 13918 | E00b 官方 mask ×20(H5 + mask 口径基准) | hades L4 | RUNNING,存活确认 ✅ |
+| 13916 | v1_orig_single(H3+H4,800ep) | persephone | RUNNING ep3+,存活确认 ✅ |
+| 13917 | v1_lowlr T1(H2 噪声地板,800ep) | persephone | RUNNING ep3+,存活确认 ✅ |
+| **13920** | **T2 v1_t2_accum512(H2 决定性:grad_accum×8 = 单卡等价 8 卡 batch512)** | persephone | **PD 排队**(等 L40 腾出) |
+| 13906/13907 | V1/V2 resume → 2000ep(**非 goal 内**,去留待用户) | persephone ×2 | RUNNING |
+| ~~13919~~ | encoded_texts.npy 恢复 | — | ✅ COMPLETED,restored (66912,1,1024) |
+
+**T2 实现记录(2026-07-06)**:v1-orig 副本 patch(scripts/patch_t2_accum.py,幂等、锚点精确匹配):①update() 支持 accum_steps/do_step(loss/accum 累积,step 时机延迟,数学等价 DDP 梯度平均,无 BN 故严格等价);②`it` 改计 optimizer steps → warm_up_iter=2000 语义与官方 8 卡一致(2000 个 batch-512 步);③TrainT2MOptions 加 --grad_accum。ast 语法验证通过。job 13920:v1_orig 代码 + batch64×accum8 + lr2e-4 + 2000ep(72h 墙钟自然截断 ~900ep,官方 best 在 ep616 窗口内)。**读法:T2 vs v1_orig(13916)同码同卡,唯一差 = 有效 batch 64 vs 512 → 纯 batch 效应隔离。**
 
 ## ⚡⚡⚡ 2026-07-06 第四批:训练 resume + 原始代码对照(用户指示)
 
