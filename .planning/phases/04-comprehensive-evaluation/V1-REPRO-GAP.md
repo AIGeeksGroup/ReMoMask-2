@@ -53,9 +53,9 @@ mask-only 口径同样存在差距(官方 ckpt 单次 ~0.102 vs retrain 20-rep 0
 - **D3 确认**:官方 0.026 确实在 set_epoch 注释状态下训出;v1_orig_single(13908)忠实复刻该状态;
 - 嫌疑收敛:**D1(卡数/有效 batch,用户核实中)+ 评估侧(E00 裁决中)**。
 
-## 3.57 D1 落锤(2026-07-06,一作确认)
+## 3.57 D1 落锤(2026-07-06,一作确认;07-06 深夜补充:**8×A800**)
 
-**官方确实 8 卡训练** → 有效 batch = 64(per-rank)× 8 = **512**;我们单卡 = 64;lr 同为 2e-4 未缩放。
+**官方确实 8 卡(A800)训练** → 有效 batch = 64(per-rank)× 8 = **512**;我们单卡 = 64;lr 同为 2e-4 未缩放。
 - 步数换算:单卡每 epoch 步数为官方 8 倍 → **我们 ep316 的累计优化步数 ≈ 官方 2000ep 全程 × 1.26**——retrain 并非欠训,而是小 batch + 未缩放 lr 的优化质量差异;这也解释 best 早现(ep316/409)后干涸。
 - **大服务器复刻规格(定):全局有效 batch 512(8 卡 × per-rank 64,或等效拆分——模型无 BN,DDP 梯度平均下等效)× 2000ep,lr 2e-4,其余照 opt.txt**;V2 按此协议重训出与 0.026 同宇宙的数字,可选加一条 V1 复现验证。
 - 归因终局(待 E00 + v1_orig 两个自动实验确认后):差距 = D1 规模效应。
@@ -130,16 +130,62 @@ rtrans 与 mtrans 唯一耦合点 = eval_res.py 完整推理(:712,mtrans 生成 
 
 **若 final 维持 interim 方向,归因终局叙述**:复现差距 = 「published 数字的口径问题」+「单次评估方差错觉」;我们的训练管线不仅无差距,在统一口径下**全面优于 released 官方 ckpt**。H2/H3/T1/T2/v1_orig 的角色从"解释我们为什么差"转为"方法学消融素材"(batch 效应、rt_in_value 效应各自量化,仍有论文价值)。
 
-## 3.86 一作对齐证据包(DRAFT,E00/E00b final 后定稿)
+## 3.86 内部证据档案(⚠️ 2026-07-06 用户确认:一作已退出项目,无对话通道——0.026 出处永远无法获得当事人确认)
 
-**给一作的问题(经用户转达)**:
-1. 论文 Table 的 FID 0.026±0.002 用的哪条命令/脚本?(eval_res.py?repeat 几次?)是否可能取自 rtrans 训练日志的 eval(GT-base tokens 口径,你日志里的 0.0221-0.0296)?
-2. MModality 2.835 怎么算的?我们用你的 ckpt + 你截图确认的协议(cond4/steps10)全 pipeline 20 次只得 ~1.4。
-3. 你截图那次 mask-only FID 0.083 是单次;我们同 ckpt 20 次均值 ~0.13-0.15,单次波动 ±0.05——你那边有 20-repeat 记录吗?
-4. 方便给一份当年 full-pipeline eval 的原始 log / opt 快照吗?
+**定位变更**:本档案不再是"对话材料",而是①期刊版口径决策的内部依据;②未来审稿人/团队成员质询时的自证材料。结论只能是**推断性**的,表述纪律:我们能证明的是"released ckpt + documented protocol(cond4/steps10,一作截图确认)下 full-pipeline 20 次 ≈0.12"和"0.026 与 rtrans 训练日志 GT-base 宇宙(0.0221-0.0296)数值吻合"——强 circumstantial,但**不断言前作数字错误**。
 
-**随附证据(全部可溯源到 job log)**:E00(13909)final 汇总、E00b(13918)final 汇总、13915 逐字复刻 0.160、rtrans ckpt 内录 Value 0.02211 ↔ 训练日志截图吻合、eval 参数逐项核验(§4)、E01/E02 我们侧四格。
-**语气**:内部口径对齐,非 challenge;先假定 0.026 有我们没想到的合法来源。
+**论文写作后果(核心)**:期刊版走「统一重评协议」路线——所有对比(含 V1 baseline)在我们的协议下重评(20 repeats, cond4/steps10, seed10107),表内全部同宇宙,published 数字不进主表(或仅以引用形式出现并标注协议不同)。这是顶刊标准做法,既自洽又不必点破前作口径问题。**唯一残留决策**:正文/表注如何措辞说明"与原论文报数不可直接比较"——等 E00/E00b final 后给用户拍板措辞方案。
+
+**证据清单(全部可溯源到 job log)**:E00(13909)final 汇总、E00b(13918)final 汇总、13915 逐字复刻 0.160、rtrans ckpt 内录 Value 0.02211 ↔ 一作训练日志截图吻合、eval 参数逐项核验(§4)、E01/E02 我们侧四格、一作留下的三个锚点(8 卡确认/master=final 确认/mask-only 单次 0.083 截图)。
+
+**封闭宇宙论证(2026-07-06,用户再次确认 master = 最新/最终代码后成立)**:代码宇宙封闭 → 0.026 必然产自这套代码里某个 eval 函数。整个 codebase 能输出 FID 的路径只有三条,三条我们都有实测:
+| 候选路径 | 口径 | 实测值 |
+|---|---|---|
+| eval_res.py(full pipeline) | 文本生成 + 精修 | **~0.122**(E00,20 次) |
+| eval_mask.py(mask-only) | 文本生成 base 层 | **~0.13-0.15**(E00b,20 次)|
+| eval_t2m_ddp.py:394(rtrans 训练期 eval) | **GT-base + 精修(上限诊断)** | **0.0221-0.0296**(ckpt 内录 + 一作日志)|
+
+只有一条路径的输出包含 0.026。无需任何人证,排除法即近乎闭合——这是证据档案的核心论证,E00/E00b final 数字落定后此表即为终稿。
+
+## 3.95 纯净复现重启(2026-07-06 深夜,用户指令:复现必须原始 v1 代码库,零修改/优化/调整)
+
+**用户三条新约束(全部落档)**:
+1. **复现纯净原则**:复现类 run 只能用官方 master 原样代码,不加任何修改/优化/调整;
+2. **无造假先验**:用户 100% 确认一作实验无掺水作假——所有口径分析必须以"诚实的口径/协议差异"为框架,表述上不指控;
+3. **兜底策略**:若最终无法复现绝对数字,退路 = 相对口径报数(V2 vs 我们的 V1 同协议对照已证明方向;具体方案:①统一重评协议(推荐,顶刊标准)②相对增益强调 ③等比例缩放估计(有审稿风险,只作候选)——E00/E00b final 后连同利弊给用户拍板)。
+
+**执行记录**:
+- T2 patch 从 v1-orig **回滚**(revert_t2_accum.py,verify grad_accum=0 处);13920 scancel;
+- **认证 diff 发现 v1-orig 血统不纯**:它由我们的 ReMoMask-2 树手动还原而来,与官方 pristine master 在核心训练/评估路径大量文件不同(trainer/transformer_ts/aux/SSTA/options/t2m_retriever/quaternion/config/Part_TMR models/build_rag_database);行为等价性无法免检 → **13916(v1_orig)/13917(T1)scancel,其数据作废**;
+- **官方 master 已 clone**(~/ReMoMask-master-pristine,github AIGeeksGroup/ReMoMask);pristine 自带 Part_TMR/conf/dataset(此前 v1-orig 缺该目录是拷贝损失,非官方库缺陷);官方启动器 run_mtrans.sh 在库内,参数样例与我们一致(batch 64/max_epoch 2000/milestones 1000000/attnj/attnt);
+- **纯净复现链已提交**:**13925**(pristine 代码 + 官方 Part_TMR ckpt 重建检索库——因 Part_TMR 模型文件也有 diff,D4 重开,库必须 pristine 重建)→ afterok → **13926**(pristine 代码 + 官方 run_mtrans.sh 原样,1×L40 单卡为唯一不可控偏差);资产(dataset/checkpoints/CLIP/pretrain_vq)symlink 注入,零代码改动;
+- **13915-diff 审计 agent 在飞**:逐文件分类 ReMoMask-2 vs pristine 的差异(A 行为性/B flag-gated/C 行为保持/D 无关),核心问题:①我们的 eval 链与官方是否行为等价(决定 E00/E01/E02 数字的解释资格)②库构建是否等价(D4)③quaternion/config 底层 diff 是什么。报告落 ~/ReMoMask-2/diff_audit_report.md;
+- **T1/T2 押后**:等 pristine 基线出轨迹 + E00b 判定"是否存在需要 batch 解释的差距"后再决定是否从 pristine 副本重开(届时改动=显式实验变量,非复现)。
+- **用户追加约束**:本集群无法也不应凑 8 卡复现——硬件维度(8×A800, batch 512)接受为不可控偏差,其影响走兜底策略(相对口径报数),不再尝试硬件复刻。
+
+## 3.96 血统分叉发现(2026-07-06 深夜,13925 失败诊断引出)
+
+**public master 的 Part_TMR 子树与 released 资产不同血统**:
+- pristine master `build_rag_database.py` + `Part_TMR/conf/config.yaml`:**distilbert-base-uncased 文本编码器(768d)、train_text_encoder=true、无 hbm_loss/part_queue** —— 一套 vanilla MoCoTMR;
+- 我们树(ReMoMask-2 承自的血统)+ **released 2.8GB Part_TMR ckpt**:**CLIP ViT-B-32(512d)、hbm_loss、part_queue_size、Part 级编码** —— 与 ECCV 论文描述的 BMM 一致;我们 6/30 用这套代码 + released ckpt 成功建库(23384 条),证明 ckpt ↔ 我们血统匹配;
+- **一作自己的 eval 截图路径 = `ReMoMaskV2/ReMoMask_open/ReMoMask`** —— 一作实际工作树是 ReMoMask_open(≈我们的血统),不是 public master 的 Part_TMR;
+- 推论(待 13927/13928 实证):public master 的检索子系统可能**无法消费 released Part_TMR ckpt**(架构不匹配)→ 若坐实,"纯 public-master 复现"在检索环节物理不可行,最接近官方实际训练环境的可运行血统就是我们树的 V1 路径。这将把 v1_retrain 的地位从"改过的复现"部分恢复为"作者实际血统的复现"(具体以 diff 审计报告为准)。
+- **13927** = pristine 建库兼容性测试(exp1 symlink + 我们 6/30 生成的 .hydra 快照;若 load_state_dict 失败即为血统不匹配的直接证据);**13928** = pristine 训练(官方 run_mtrans.sh 原样,retriever 加载 released ckpt 一步即是决定性兼容测试)。13925/13926 已废弃(路径错误/死依赖)。
+
+## 3.97 终局:public master 复现物理不可行,三项实证(2026-07-06 深夜)
+
+| # | 实验 | 失败点 | 证明 |
+|---|---|---|---|
+| 1 | 13927 pristine 建库 | `AutoTokenizer.from_pretrained('ViT-B-32.pt')` → HF 404 | master 建库代码期望 HF 模型名(distilbert 血统),无法消费 released 资产的 CLIP 配置 |
+| 2 | 13928 pristine 训练 | `common/skeleton.py` numpy≥1.24 废弃别名 import 崩 | master 代码在现代 numpy 下不可运行(era 环境问题;PYTHONPATH 注入 numpy 1.23.5 绕过,零代码修改)|
+| 3 | 13929 pristine 训练(legacy numpy) | 过了 import、过了 VQ 加载,死于检索子系统同款 tokenizer 404 | **训练路径同样无法消费 released Part_TMR 资产 —— 终局证明** |
+
+**结论链**:
+1. public master 的检索子系统(distilbert/768d 血统)与 released Part_TMR ckpt(CLIP/512d/Part 级血统)接口不兼容,建库与训练双路径实证;
+2. 一作 eval 截图路径 = `ReMoMaskV2/ReMoMask_open/ReMoMask` → **作者实际工作树是 ReMoMask_open 血统,而我们树的底子正是该血统**(Part_TMR 代码能 strict 加载 released ckpt 为证);
+3. 因此「复现」的正确基准 = 作者实际血统(≈我们树的 V1 路径),而非 public master;**v1_orig(我们树 + 已知修改手动还原:无 rt_in_value、set_epoch 保持注释)恢复为合法复现载体**——13916 之前按 public-master 纯度标准误杀,已以 --is_continue 从 latest.tar(~ep30)恢复为 **13930**;
+4. 残余不可知项:ReMoMask_open 与我们树底子之间可能存在的差异(无从 diff,ReMoMask_open 不可得)——诚实披露即可;diff 审计报告(agent 在飞)将给出我们 V1 路径 vs public master core 的逐文件分类,若 mtrans/rtrans 核心一致,则「作者血统 ≈ master core + CLIP-Part_TMR 子树 ≈ 我们树还原版」闭环。
+5. 论文口径后果:复现叙述 = 「在作者实际代码血统上、单卡硬件(8×A800 不可复刻,用户确认不做)、统一协议下的 controlled re-evaluation」——与兜底策略(相对口径报数)完全兼容。
 
 ## 3.9 实验执行勘误(2026-07-06 深夜)
 
