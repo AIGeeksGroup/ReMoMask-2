@@ -1,5 +1,41 @@
 # Phase 4 实验运行登记(RUNS)
 
+## ⚡⚡⚡⚡ 2026-07-06 深夜收数 sync(新 session)—— E00 中期裁决 + 三个新警报
+
+### E00 中期(13909,10/20 repeats,仍在跑)—— 裁决性信号
+官方 pretrain_mtrans(ep616,ckpt 内录 mask-only Value 0.0934)+ 官方 pretrain_rtrans(ep217,ckpt 内录 GT-base Value 0.0221)过我们 eval_res:**前 10 次 FID 0.111-0.131,running mean ~0.122**;R9 样本 MModality 1.387。
+**中期裁决**:官方 ckpt 在我们评估链下 = **~0.12,不是 0.026,也不是 0.0221**;MModality ~1.39 ≠ 论文 2.84(同一 ckpt!排除 batch/训练解释)→ **假设 B(论文 0.026 出自 rtrans 训练日志的 GT-base 口径,0.0221-0.0296 宇宙)证据大幅增强**。
+**格局反转**:同一评估链下我们的 V1 retrain full=0.083 **好于**官方 ckpt full≈0.122 —— "复现差距"不是我们训得差,而是**口径差距**(paper 数字与 released assets + 本评估链不互通)。旧的 D1(batch)叙事降级:它解释不了官方 ckpt 自己也到不了 0.026。
+→ 待 E00 final(20/20)+ E00b 确认后,与一作对齐「0.026 的确切评估命令」成为最高优先级。
+
+### 新警报 1:E04/E05 四配置结果字节级相同(uninterpretable)
+13902(z_q 库,k=2,nr=10)、13903/13904/13905(z_e 库,k=1/4/8,nr=16)全部 COMPLETED,header 证实检索配置各不相同且已生效,但**四份 final 结果完全一致到最后一位**:FID 0.110±0.004 | Top1/2/3 0.508/0.699/0.793 | Matching 2.974 | MMod 1.202(且与 E02-V2 相同)。
+**结论:eval_mask 的生成路径疑似根本不消费检索特征**(或 re_dict 未进 generate)。E04/E05 的换库/扫 k 设计在此前提下全部失效,**数字不可用**;必须先做代码级调查(eval_mask.py → generate() 是否传/用 re_dict)。⚠️ 注意:E02 四格不受此影响(它对比的是两个不同 ckpt 的权重,不依赖 eval 期检索差异);但「检索在推理期是否起作用」本身升级为一个必须回答的问题——若确认推理期无效,这既是 bug 也可能是重要 finding(检索=训练期正则)。
+
+### 新警报 2:projector R@k 全部 chance 水平
+基线(κ256)best R@1 = 2.99e-05,κ64 = 2.99e-05,κ1024 = 1.49e-05(66912 库,chance≈1.5e-05,即 1-2 命中)。**此前读数漏看 e-05 指数**。回溯:02-03 冒烟的 R@1=0.0312 = 1/32 = 同样是 chance——**projector 从未展示过超随机的 exact-index 检索能力**。与 E03 的 ρ=0.58(秩相关中等)并存 → 要么 R@k 计算/口径有问题,要么 projector 只学到粗粒度排序。κ 消融表(论文占位)暂缓回填,先查 train_query_projector.py 的 R@k 实现与 teacher 自身 R@1 基准。
+
+### 新警报 3:database_ze/encoded_texts.npy 被 κ 任务覆写污染
+κ64(10:07)与 κ1024(10:08)先后把各自投影结果写进共享 database_ze/encoded_texts.npy(train_query_projector.py 末步设计缺陷:变体实验必须用隔离目录)。**污染窗口内运行的任务**:E04/E05(16:24-17:15,读了 κ1024 版特征——是其结果异常的叠加嫌疑之一)、**13907 V2 resume(训练中,已把污染特征加载进内存)**。
+**已处置**:13919 = 恢复任务(用基线 best_projector.pt 确定性重投影,CPU job)。13907 的续训段(ep1676→2000)吃了污染数据,但该段本就无望刷新 best、其 ckpt 不会被使用 → 损害受限;是否 scancel 等用户拍板。
+
+### 崩溃修复 + 新提交
+- **13908/13910(v1_orig/T1-lowlr)实际 8-13 秒即崩**(hydra MissingConfigException:v1-orig 缺 Part_TMR/conf/dataset/),上一 session 未验证存活。已补配置,重交:**13916 = v1_orig_single、13917 = v1_lowlr(T1)**。rt_in_value-vs-batch 归因实验现在才真正开始。
+- **13918 = E00b(新)**:官方 ckpt mask-only ×20(我们标准协议 seed10107),补齐「官方/我们 × mask/full」2×2 口径矩阵——官方 mask-only 现有三个单次观测(一作 0.083 / 我们 0.102 / 13915 逐字复刻 0.160)方差巨大,需要稳定均值。
+- **13915 已完成**:一作命令逐字复刻单次 = **FID 0.160**(vs 一作 0.083、我们旧单次 0.102)→ 单次 eval_mask FID 方差极大(0.083-0.160),一作的 0.083 可能只是有利抽样,「环境差」用单次数据不可判——以 13918 的 20 次均值为准。
+- **13906/13907 resume 进度**:ep~1698/1700,session best 0.271/0.233(tracker 已重置,非全局 best);轨迹远离最优,如期不会刷新 0.1273/0.0991。
+- 磁盘警戒:/home 97%(余 210G)。
+
+### 当前在飞(2026-07-06 深夜)
+| Job | 内容 | 节点 |
+|---|---|---|
+| 13909 | E00 官方 full ×20(10/20) | hades L4 |
+| 13906/13907 | V1/V2 resume → 2000ep | persephone ×2 |
+| 13916 | v1_orig_single(D2+D3 归因,800ep) | persephone |
+| 13917 | v1_lowlr T1(噪声地板,800ep) | persephone |
+| 13918 | E00b 官方 mask ×20 | hades L4 |
+| 13919 | encoded_texts.npy 恢复(CPU) | any |
+
 ## ⚡⚡⚡ 2026-07-06 第四批:训练 resume + 原始代码对照(用户指示)
 
 - **13906 = V1 resume**(v1_retrain_rtval,--is_continue 自 ep1672 → 2000ep,port 12585)

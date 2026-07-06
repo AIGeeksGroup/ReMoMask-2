@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 4
 current_phase_name: Comprehensive Evaluation & Paper Experiments
 status: executing
-stopped_at: "Phase 4 Wave 1 在飞（jobs 13885-13892，见 phases/04-*/RUNS.md）；Phase 2 训练仍在跑（提前停待拍板）；论文期刊版扩写已完成第一轮（v2working）。"
-last_updated: "2026-07-05"
-last_activity: 2026-07-05
-last_activity_desc: "论文写作启动：深读 v1 全文、表格改名+ReMoMask-2 占位行、方法/intro/消融起草中"
+stopped_at: "2026-07-06 深夜收数 sync 完成;E00/E00b/归因训练在飞"
+last_updated: "2026-07-06T23:59:00.000Z"
+last_activity: 2026-07-06
+last_activity_desc: "E00 中期裁决(官方 ckpt ~0.122≠0.026)+ 三警报(E04/E05 无效、projector R@k chance、encoded_texts 污染)+ 修复重交 13916-13919"
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 7
-  completed_plans: 5
-  percent: 71
+  completed_plans: 7
+  percent: 65
 ---
 
 # Project State
@@ -24,24 +24,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-27)
 
 **Core value:** 检索空间与生成空间统一后 FID 必须优于 V1
-**Current focus:** Phase 2: Latent-Aligned Retrieval (Plan A)
+**Current focus:** Phase 4: Comprehensive Evaluation(E 系列实验 + 复现口径归因)+ 论文 V2 写作
 
 ## Current Position
 
-Phase: 2 of 4 (Latent-Aligned Retrieval)
-Status: Wave 1-3 complete, Wave 4 blocked on full training
-Last activity: 2026-06-30 — Remote server setup + demo verified
+Phase: 4 of 4 (Comprehensive Evaluation & Paper)
+Status: E01/E02/E03 已出数;E00 口径裁决在飞;E04/E05 数字作废待代码调查;归因训练(v1_orig/T1)刚真正开跑
+Last activity: 2026-07-06 深夜 — 收数 sync + 修复重交(详见 RUNS.md 顶部深夜段)
 
-Progress: [███████░░░] 71%
+Progress: [██████▌░░░] 65%
 
 ## Phase Status
 
 | Phase | Status | Summary |
 |-------|--------|---------|
-| 1. Zero-Cost Ablations | **COMPLETE** | ABL-01 CFG schedule 信号模糊; ABL-02 R_t-in-Value FID -13% ← 采纳 |
-| 2. Latent-Aligned Retrieval | **训练收尾中** | 6/6 plans done;V1/V2 对照训练 ~65%,best 已定型(ep316/ep409),提前停待拍板 |
+| 1. Zero-Cost Ablations | **COMPLETE** | ABL-01 CFG schedule 信号模糊; ABL-02 R_t-in-Value FID -13% ← 采纳(⚠️ 训练版 rt_in_value 嫌疑升级,见 V1-REPRO-GAP §3.59) |
+| 2. Latent-Aligned Retrieval | **COMPLETE** | 6/6 plans;训练 TIMEOUT 终局 ep1676/1672,best 坐实 V2 0.0991@ep409 / V1 0.1273@ep316;正式验证挂 E 系列数字后 |
 | 3. Iterative Dynamic Retrieval | **DEFERRED** | Plan B 搁置(2026-07-05),论文仅 future work |
-| 4. Comprehensive Eval & Paper Experiments | **IN PROGRESS** | E01-E08 在飞/排队(RUNS.md);E03 ✅(ρ=0.58, overlap@10=18.5%);E09 压轴 800ep;E12/KIT/Snap 随大服务器批 |
+| 4. Comprehensive Eval & Paper Experiments | **IN PROGRESS** | E01✅ E02✅ E03✅;E00 口径裁决在飞(中期:官方 ckpt ~0.122≠论文 0.026);E04/E05 数字作废(eval 检索无效警报);κ 表暂缓(R@k 全 chance);E09 压轴 |
 
 ## Phase 1 Results
 
@@ -80,35 +80,43 @@ Progress: [███████░░░] 71%
 - Environment: conda remomask (Python 3.10 + PyTorch 2.1.0+cu118)
 - Data: checkpoints + database (全量重建 23384 条) + HumanML3D + database_ze 全部就位
 
-## SLURM Training (2026-07-05 快照)
+## SLURM 在飞(2026-07-06 深夜快照;历史训练 13845/13846 已 TIMEOUT 终局)
 
-| Job ID | 名称 | 进度 | 全局 best FID | 最优 ckpt |
-|--------|------|------|--------------|----------|
-| 13845 | v2_train (resume 自 13784@ep766) | ep ~1271/2000 | **0.0991 @ ep409** | net_best_fid_ep0409.tar |
-| 13846 | v1_retrain (resume 自 13791@ep762) | ep ~1268/2000 | 0.1273 @ ep316 | net_best_fid_ep0316.tar |
+| Job ID | 内容 | 节点 | 备注 |
+|--------|------|------|------|
+| 13909 | E00 官方 ckpt full ×20(口径裁决) | hades L4 | 中期 10/20:FID ~0.122,MMod ~1.39 |
+| 13918 | E00b 官方 ckpt mask-only ×20 | hades L4 | 补齐 2×2 口径矩阵 |
+| 13916 | v1_orig_single(D2+D3 归因,800ep) | persephone | 13908 秒崩修复后重交 |
+| 13917 | T1 v1_lowlr(噪声地板,800ep) | persephone | 13910 秒崩修复后重交 |
+| 13906/13907 | V1/V2 resume → 2000ep | persephone | 无望刷新 best;13907 吃了污染 encoded_texts,**去留待用户** |
+| 13919 | encoded_texts.npy 恢复(CPU) | any | 基线 projector 确定性重投影 |
 
-- lr 恒定 2e-4，FID 已饱和 → 剩余 epoch 大概率不刷新 best，可考虑提前停
-- 看门狗 train_watchdog.sh 在登录节点自动重交（脚本未实战验证）
-- ⚠️ resume 后 net_best_fid.tar 被次优覆盖，正式评估显式用 ep0409/ep0316 文件
+- 最优 ckpt 不变:**V2 0.0991@ep0409 / V1 0.1273@ep0316**(mask-only 单次口径);正式数字见 RUNS.md E01/E02 表
+- ⚠️ 磁盘 /home 97%(余 210G)
 
 ## Next Steps
 
-1. **Phase 4 已重定义并写好执行规格**:`.planning/phases/04-comprehensive-evaluation/EXPERIMENTS-SPEC.md`(E01-E11 逐条命令/gap/成本)+ 04-CONTEXT.md(wave 结构 + 4 个拍板项 D-P4-01..04);Phase 3 (Plan B) 正式 DEFERRED
-2. 训练停止(D-P4-01 拍板)→ Wave 1:E01 正式评估 + E02 mask-only + E03/E04 离线分析(E03 无前置,现在就能跑)
-3. 代码 gap G1-G9(~435 LOC,spec 内清单)可先行实现+冒烟,分发 Sonnet xhigh
-4. Phase 2 正式验证(/gsd-verify-work 2)在 E01 数字落地后跑
-5. 论文：**写作已启动（2026-07-05）**。唯一可信 LaTeX = `D:\tpami\currentversion\v2working\`（解压自 `currentversion/_TPAMI_2026__ReMoMask_2 (1).zip`；旧路径 `_TPAMI_2026__ReMoMask_2/` 作废）。写作文档：`.planning/paper-v2/`（PLAN-A-FACTS / V2-REVISION-PLAN / FIG1-DESIGN / ABLATION-DESIGN）。v1 全文已深读；表格 Ours→ReMoMask + ReMoMask-2 高亮占位行已完成；方法/intro/消融扩写进行中
+1. **收 E00 final + E00b** → 口径裁决落锤 → 整理「与一作对齐 0.026 评估命令」的问题清单(最高优先级)
+2. **代码调查 ×2**:①eval_mask 生成路径是否消费 re_dict(E04/E05 四配置字节级相同的根因);②projector R@k 实现 + teacher 自身 R@1 基准(全 chance 之谜)
+3. 收 13916/13917(v1_orig/T1)训练曲线 → rt_in_value-vs-batch 归因(V1-REPRO-GAP §3 三点定位)
+4. T2(梯度累积 ×8 等价 8 卡)实现与提交,~20 LOC
+5. 论文:叙事方案 A 等用户点头后回填;PLACEHOLDERS 回填遵循「口径统一」原则(E00 裁决影响主表口径设计)
+6. Phase 2 正式验证(/gsd-verify-work 2)在口径问题厘清后跑
 
 ## Blockers
 
-- 等待 V1/V2 训练（13845/13846）完成或做提前停决策
+- E00/E00b 口径裁决(在飞,数小时)
+- 一作侧信息:0.026 的确切评估命令/脚本(E00 落锤后发问)
+- 用户拍板:13906/13907 去留;叙事方案 A;E04/E05 调查 vs 论文推进的优先级
 
 ## Session Continuity
 
-Last session: 2026-07-05(论文扩写 + Phase 4 开工)
-**完整 handoff 见: .planning/phases/02-latent-aligned-retrieval-plan-a/.continue-here.md(顶部「傍晚更新」段)**
-**在飞实验登记: .planning/phases/04-comprehensive-evaluation/RUNS.md(新 session 必读)**
+**Stopped at:** 2026-07-06 深夜收数 sync 完成
+
+Last session: 2026-07-06(深夜)
+**完整 handoff 见: .planning/phases/02-latent-aligned-retrieval-plan-a/.continue-here.md(顶部「深夜」段)**
+**在飞实验登记: .planning/phases/04-comprehensive-evaluation/RUNS.md(新 session 必读,顶部深夜 sync 段)**
+**口径归因档案: .planning/phases/04-comprehensive-evaluation/V1-REPRO-GAP.md(§3.8 E00 中期裁决)**
 Resume with: /gsd-progress 或 /gsd-resume-work
-Monitor(训练): ssh diana.acfr.usyd.edu.au "sacct -j 13845,13846 --format=JobID,JobName%18,State%12,Elapsed -n"
-Monitor(Phase4): ssh diana.acfr.usyd.edu.au "sacct -j 13885,13886,13887,13888,13889,13890,13891,13892 --format=JobID,JobName%14,State%12,Elapsed -n | grep -v batch"
+Monitor: ssh diana.acfr.usyd.edu.au "sacct -j 13906,13907,13909,13916,13917,13918,13919 --format=JobID,JobName%16,State%12,Elapsed -n | grep -v batch"
 ⚠️ 上一 session 的进程内 Monitor 不跨 session,接手后需重挂或手动轮询。

@@ -98,3 +98,22 @@ mask-only 口径同样存在差距(官方 ckpt 单次 ~0.102 vs retrain 20-rep 0
 **代码口径(eval_t2m_ddp.py:394 evaluation_res_transformer)**:GT motion → vq_model.encode(:450)→ 取 GT base 层 tokens(code_indices[...,0])→ rtrans 仅预测残差层(:457-464)→ 解码算 FID。**全程无 mtrans,= "GT-base + 精修"的上限诊断口径,非文本生成性能**。
 rtrans 与 mtrans 唯一耦合点 = eval_res.py 完整推理(:712,mtrans 生成 base → rtrans 精修)。
 **两种假设,E00(13909)裁决**:A)论文 0.026 来自完整 pipeline(E00≈0.026 则成立);B)论文 0.026 混淆了 GT-base 口径(E00 显著更高则可能性大增 → 期刊版必须换正确口径报数)。此发现同时解释 arXiv 版 Table1 0.099 vs Table4 0.411 的口径混杂迹象。
+
+## 3.8 E00 中期裁决 + 13915 结果(2026-07-06 深夜,新 session 收数)
+
+**E00(13909)前 10/20 repeats:官方 mtrans+rtrans 过我们 eval_res = FID 0.111-0.131,mean ~0.122;MModality ~1.39。**
+
+三个直接推论:
+1. **假设 B 证据大幅增强**:官方 ckpt 自己在完整 pipeline 口径下 ≈0.12,到不了 0.026;而 0.026 恰在 rtrans 训练日志 GT-base 宇宙(0.0221-0.0296)内。MModality 是独立铁证:同一 ckpt 在我们链下 1.39,论文报 2.84——**这不是训练差距能解释的(ckpt 相同),只能是评估口径/协议不同**。
+2. **格局反转,"复现差距"重定义**:同一评估链下 v1_retrain(0.083)**优于**官方 ckpt(~0.122)。我们不是"没复现好"——是 released assets 在一致协议下根本达不到 paper 数字。D1(batch)从"复现差距主因"降级为"我们与官方 ckpt 之间 mask-only 差异(0.132 vs ~0.10?)的候选解释"——且该差异方向也待 E00b 用 20 次均值确认(官方 mask-only 单次观测 0.083/0.102/0.160 方差过大,可能根本没有显著差异)。
+3. **对论文的直接含义**:主表如果引用 published 0.026 并与我们协议下的数字同表,就是口径混杂。干净方案 = 全表统一"our protocol"口径(官方 ckpt 数字用 E00/E00b 实测),published 数字只在脚注/文字中说明差异并给出口径解释。**最高优先级待办:拿着 E00 final + E00b + MModality 铁证与一作对齐 0.026 的确切评估命令**(问题清单:用哪个脚本/哪个 ext/repeat 几次/MModality 怎么算的)。
+
+**13915(一作命令逐字复刻,单次)= FID 0.160**,vs 一作 0.083、我们旧单次 0.102。三个同 ckpt 同协议单次观测横跨 2 倍 → 单次 eval_mask FID 方差极大,"环境差 ~0.02"的此前推测不可靠,一作 0.083 可能是有利抽样。**单次对比作废,以 E00b(13918,20 repeats)为准。**
+
+**新增归因注意**:E00 的 full(~0.122)>官方 ckpt 内录 mask-only Value(0.0934)——精修反而变差?与我们 ckpt 的精修方向(0.132→0.083)相反。待 E00b 出稳定 mask-only 均值后再解读(若官方 mask-only 20 次均值其实 ~0.12-0.15,则"精修变差"是错觉,内录 Value 0.0934 只是训练期单次评的有利值)。
+
+## 3.9 实验执行勘误(2026-07-06 深夜)
+
+- 13908/13910(v1_orig / T1-lowlr)**从未真正跑起来**(8-13 秒 hydra MissingConfigException,v1-orig 缺 Part_TMR/conf/dataset/),上一 session 提交后未验证存活。已修复配置并重交:**13916(v1_orig)/ 13917(T1)**。D2/D3 归因数据尚不存在,§3 的三点定位表仍全部待填。
+- κ 变体任务的隐性破坏:train_query_projector.py 末步把投影结果写回共享 database_ze/encoded_texts.npy → κ64/κ1024 先后覆写(07-06 10:07/10:08)。E04/E05 与 13907(V2 resume)在污染窗口内读取。已提交 13919 恢复(基线 best_projector.pt 确定性重投影)。**教训:变体训练必须用隔离输出目录。**
+- E04/E05 结果四配置字节级相同 → eval_mask 生成路径疑似不消费检索特征,数字全部作废待代码调查(详见 RUNS.md 深夜 sync 段)。
