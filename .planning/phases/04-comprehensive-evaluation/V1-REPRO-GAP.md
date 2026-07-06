@@ -60,6 +60,14 @@ mask-only 口径同样存在差距(官方 ckpt 单次 ~0.102 vs retrain 20-rep 0
 - **大服务器复刻规格(定):全局有效 batch 512(8 卡 × per-rank 64,或等效拆分——模型无 BN,DDP 梯度平均下等效)× 2000ep,lr 2e-4,其余照 opt.txt**;V2 按此协议重训出与 0.026 同宇宙的数字,可选加一条 V1 复现验证。
 - 归因终局(待 E00 + v1_orig 两个自动实验确认后):差距 = D1 规模效应。
 
+## 3.58 「多卡真能拉回 gain 吗?」证伪计划(2026-07-06,用户提出关键质疑)
+
+用户直觉:batch 拉不回 3.2 倍。分析要点:
+- batch 在本 setup 可能异常承重的两个非典型条件:①lr 恒定不衰减 → 收敛末端质量由噪声地板 lr/batch 决定,8 卡地板 = 1/8,等效从未有过的退火(步数上我们不欠训:ep316 ≈ 官方全程 ×1.26);②精修级联放大:batch 只需解释 mask-only 的 −30%(0.132 vs 官方 ~0.09-0.10),3.2 倍是 full 口径被 rtrans 非线性放大后的表象(精修收益:官方 −69% / retrain −37% / V2 −19%,质量越好精修越赚)。
+- 用户直觉的实锤支撑点:**MModality 1.39 vs 2.84 难以用 batch 解释**——E00 的 full 口径 MModality 是关键证词(若 ~1.4 → 论文该格另有出处)。
+- **T1 已提交(job 13910,v1_orig_lowlr)**:单卡 batch 64 + lr 2.5e-5(精确匹配官方 lr/batch),其余同 v1_orig。读法:mask-only best 显著低于 0.132 → 噪声地板假说立;不动 → batch 假说重伤。
+- **T2(待实现,~20 LOC)**:trainer 加梯度累积 ×8 → 单卡数学等价复刻 8 卡 batch512+lr2e-4(无 BN,严格等价),是"换多卡能否拉回"的决定性实验,无需真买多卡。下 session 实现。
+
 ## 3.6 一作侧锚点(2026-07-06,用户从一作处取得的历史截图)
 
 一作本人评官方 pretrain_mtrans(eval_mask,repeat=1,cond_scale=4,time_steps=10,which_epoch=net_best_fid.tar,路径 /data/AI4E/lzd/AAAI/ReMoMaskV2/ReMoMask_open/ReMoMask):
