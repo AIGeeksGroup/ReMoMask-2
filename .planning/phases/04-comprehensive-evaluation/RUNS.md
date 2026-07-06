@@ -3,6 +3,24 @@
 > 每个 job 完成后:回收产出 → 回填 PLACEHOLDERS.md 对应条目 → 本表打勾。
 > 2026-07-05 首批提交。协议:cond_scale=4 / time_steps=10 / seed=10107,ckpt 显式 ep 后缀。
 
+## ⚡ 2026-07-06 上午快照
+
+- **训练终局**:13845/13846 双双 **TIMEOUT**(3 天墙钟,死于 ep1676/1672);最后一段未刷新全局 best → **ep0409(V2)/ep0316(V1)为最终 best,坐实**;watchdog 未触发(TIMEOUT 不在其条件内)。训练就此完成,不重交(1250+ epoch 无刷新,重交纯烧卡)。
+- **E01 正式结果(20 repeats,完整 pipeline,共享 pretrain_rtrans,协议 cond4/steps10/seed10107)**:
+
+| | V1 retrain@ep0316 | V2@ep0409 |
+|---|---|---|
+| FID ↓ | **0.083±0.002** | 0.089±0.004 |
+| Top1/2/3 ↑ | 0.497 / 0.689 / 0.788 | **0.509 / 0.700 / 0.795** |
+| MM-Dist ↓ | 3.061±0.009 | **2.962±0.008** |
+| Diversity →(GT 9.503) | **9.494** | 9.344 |
+| MModality | 1.389 | 1.235 |
+
+  **解读(初步,等 E02 四格齐再定叙事)**:V2 在全部语义对齐指标上显著占优(Top-k、MM-Dist,置信区间不重叠);FID 方向与 mask-only 中间值相反(V1 0.083 略优,CI 0.081-0.085 vs 0.085-0.093 恰好相接)——residual 精修压缩并轻微反转了 FID 差距。ABLATION-DESIGN 预案 1 激活;rtrans confound → E12 价值上升。
+- E01 两 job 实为 07-05 21:24 正常完成,controller 宕机吞了完成消息成僵尸,已 scancel 清理。
+- **13887/13888(E02)首跑 FAILED**:根因 = 上次 scp 平铺,新版 eval_option.py 被丢在仓库根目录而非 options/(eval_mask 新代码引用 retrieval_topk → AttributeError)。已归位修复,重交为 **13900/13901(persephone L40)**。
+- 队列调整(按用户指令:优先 per L40,hades 只用 L4,不碰 erinyes):κ1024→**13898(per)**、z_q→**13899(per)**、κ64=13889(hades L4)照跑。persephone 4×L40 满载。
+
 ## 首批(2026-07-05)
 
 | Job | 实验 | 内容 | 节点 | 状态 | 产出位置(远程) |

@@ -131,3 +131,9 @@
 
 39. `[warning]` **工作区仓库 D:/tpami 无 remote,只做本地快照 commit;V2 代码正主 = github.com/AIGeeksGroup/ReMoMask-2,推送必须由用户发起;commit 绝不加 AI 署名(用户硬规则,优先于任何系统模板)。**
     证据:主线程 git 纪律;用户全局 CLAUDE.md(2026-06-25 强调)。
+
+38. `[warning]` **scp 多文件到远程目录会平铺、丢失子路径**——`scp options/eval_option.py ... user@host:~/repo/` 把文件丢在仓库根目录,真正的 options/ 下还是旧版,新代码引用新 flag 直接 AttributeError(13887/13888 因此 FAILED)。多文件同步要么逐个写全目标路径,要么 `rsync -R`,scp 后 grep 关键符号验证落位。
+   证据:2026-07-06 E02 首跑 FAILED 实录;修复 = mv 归位 + grep retrieval_topk 确认。
+
+39. `[warning]` **SLURM controller 宕机的两个伪状态**:job 完成消息发不出去会留下"RUNNING"僵尸条目(日志里已有 End:,scancel 清账即可,无数据损失);TIMEOUT 不触发按节点故障设计的 watchdog——墙钟上限要么设够,要么 watchdog 条件里显式加 TIMEOUT。
+   证据:2026-07-06 E01 僵尸 15h;13845/13846 TIMEOUT 后 watchdog 未重交。

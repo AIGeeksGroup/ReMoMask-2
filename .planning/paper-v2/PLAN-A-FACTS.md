@@ -78,7 +78,13 @@
 - **原始发表 V1 是 K-only(V 只有 R_m)**;我们的 V1 retrain 加了 rt_in_value = "增强版 baseline",保证 V1/V2 对照的唯一变量 = 检索模块。
 - 与 ECCV tab:ablation 的张力及化解叙事:ECCV 表中 V+={R_t}(CLIP 语义空间的 R_t)FID 变差 0.104,支撑 "domain mismatch" 论断;**V2 中 R_t 经 projector 投入 z_e 空间(motion-aligned),不再是跨域信号**——因此 value 路由的重新审视在 latent 对齐后成立。消融设计 {Part_TMR, z_e} × {rt on/off} 正好检验此叙事(若 Part_TMR+rt 也涨,则叙事调整为"更长训练下的重新评估")。
 
-### 训练对照(进行中,2026-07-05)
+### E01 正式对照结果(2026-07-06,20 repeats 完整 pipeline,可回填但等用户核数)
+- V1 retrain@ep0316:FID 0.083±0.002,Top1/2/3 0.497/0.689/0.788,MM-Dist 3.061±0.009,Div 9.494,MMod 1.389
+- V2@ep0409:FID 0.089±0.004,Top1/2/3 **0.509/0.700/0.795**,MM-Dist **2.962±0.008**,Div 9.344,MMod 1.235
+- ⚠️ 与 dummy 假设的偏差:full-pipeline FID V1 略优(方向与 mask-only 相反);V2 语义对齐指标全面显著占优。**叙事调整等 E02 mask-only 20-repeat 出来四格齐后再定**(ABLATION-DESIGN 预案 1)。
+- 训练终局:双双 TIMEOUT 于 ep1676/1672(3 天墙钟),最后一段无新 best → ep0409/ep0316 为最终 best(已坐实,非 provisional)。
+
+### 训练对照(2026-07-06 已结束:TIMEOUT 终局,见上)
 - V1 `v1_retrain_rtval`(job 13846)vs V2 `v2_ze_rtval`(job 13845),persephone 各 1×L40,配置与 V1 opt.txt 完全一致(latent_dim=512, n_heads=8, n_layers=8, ff_size=1024, batch 64, lr 2e-4 恒定, seed 3407),两边都开 rt_in_value,唯一变量 = 检索模块。
 - 中间结果(MaskTransformer 单独 + 单次 eval,**不是论文数字**):V2 best FID **0.0991@ep409** vs V1 **0.1273@ep316**(V2 −22%)。
 - 论文数字必须来自 `eval_res.py`(Mask+Residual 完整 pipeline)× 20 repeats,checkpoint 显式用 `net_best_fid_ep0409.tar` / `net_best_fid_ep0316.tar`(无后缀文件已被 resume 污染)。
