@@ -38,6 +38,13 @@ mask-only 口径同样存在差距(官方 ckpt 单次 ~0.102 vs retrain 20-rep 0
   - v1_orig_single 明显异于 v1_retrain_rtval → 代码偏差承重,需逐项拆
 - 与官方 0.026 的残余差距仍含 D1(规模)——那部分等官方卡数核实后由大服务器完整协议复刻回答。
 
+## 3.5 E00 评估环境自检(2026-07-06 提交,job 13909,hades L4)
+
+官方 pretrain_mtrans(ep616)+ 官方 pretrain_rtrans 过我们的 eval_res × 20(协议 cond4/steps10/seed10107,无 rt_in_value)。
+此前只有 Phase 1 的 mask-only 单次(FID 0.102);full-pipeline 官方 ckpt 从未跑过。
+读法:**≈0.026 → 评估链路忠实,差距全在训练侧;显著更差 → 评估协议有偏,0.083/0.089 需重新校准**。
+(注:arXiv 版 0.099 与 mask-only 0.102 数值巧合接近,疑似 arXiv 即 mask-only 口径,待团队确认。)
+
 ## 4. 决策记录
 
 - 训练 resume(2026-07-06,用户指示):13845/13846 TIMEOUT 于 ep1676/1672 后,按用户要求 `--is_continue` 续训至 2000ep(尽管 best 已定型;完整性/官方对齐用途)。
