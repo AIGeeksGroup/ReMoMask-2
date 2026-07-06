@@ -53,6 +53,13 @@ mask-only 口径同样存在差距(官方 ckpt 单次 ~0.102 vs retrain 20-rep 0
 - **D3 确认**:官方 0.026 确实在 set_epoch 注释状态下训出;v1_orig_single(13908)忠实复刻该状态;
 - 嫌疑收敛:**D1(卡数/有效 batch,用户核实中)+ 评估侧(E00 裁决中)**。
 
+## 3.57 D1 落锤(2026-07-06,一作确认)
+
+**官方确实 8 卡训练** → 有效 batch = 64(per-rank)× 8 = **512**;我们单卡 = 64;lr 同为 2e-4 未缩放。
+- 步数换算:单卡每 epoch 步数为官方 8 倍 → **我们 ep316 的累计优化步数 ≈ 官方 2000ep 全程 × 1.26**——retrain 并非欠训,而是小 batch + 未缩放 lr 的优化质量差异;这也解释 best 早现(ep316/409)后干涸。
+- **大服务器复刻规格(定):全局有效 batch 512(8 卡 × per-rank 64,或等效拆分——模型无 BN,DDP 梯度平均下等效)× 2000ep,lr 2e-4,其余照 opt.txt**;V2 按此协议重训出与 0.026 同宇宙的数字,可选加一条 V1 复现验证。
+- 归因终局(待 E00 + v1_orig 两个自动实验确认后):差距 = D1 规模效应。
+
 ## 3.6 一作侧锚点(2026-07-06,用户从一作处取得的历史截图)
 
 一作本人评官方 pretrain_mtrans(eval_mask,repeat=1,cond_scale=4,time_steps=10,which_epoch=net_best_fid.tar,路径 /data/AI4E/lzd/AAAI/ReMoMaskV2/ReMoMask_open/ReMoMask):
