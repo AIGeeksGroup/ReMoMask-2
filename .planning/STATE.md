@@ -5,10 +5,10 @@ milestone_name: milestone
 current_phase: 4
 current_phase_name: Comprehensive Evaluation & Paper Experiments
 status: executing
-stopped_at: "2026-07-06 深夜收数 sync 完成;E00/E00b/归因训练在飞"
-last_updated: "2026-07-06T23:59:00.000Z"
-last_activity: 2026-07-06
-last_activity_desc: "E00 中期裁决(官方 ckpt ~0.122≠0.026)+ 三警报(E04/E05 无效、projector R@k chance、encoded_texts 污染)+ 修复重交 13916-13919"
+stopped_at: "2026-07-07 凌晨:复现归因全程收官(三宇宙实测三角闭合),handoff 完成"
+last_updated: "2026-07-07T00:30:00.000Z"
+last_activity: 2026-07-07
+last_activity_desc: "H1 实测落锤(GT-base 0.0235 命中 published 0.026)+ DIFF-AUDIT 权重法证 + arXiv 行逐指标归属;主表三行结构提案待拍板"
 progress:
   total_phases: 4
   completed_phases: 2
@@ -96,27 +96,25 @@ Progress: [██████▌░░░] 65%
 
 ## Next Steps
 
-1. **收 E00 final + E00b** → 口径裁决落锤 → 整理「与一作对齐 0.026 评估命令」的问题清单(最高优先级)
-2. **代码调查 ×2**:①eval_mask 生成路径是否消费 re_dict(E04/E05 四配置字节级相同的根因);②projector R@k 实现 + teacher 自身 R@1 基准(全 chance 之谜)
-3. 收 13916/13917(v1_orig/T1)训练曲线 → rt_in_value-vs-batch 归因(V1-REPRO-GAP §3 三点定位)
-4. T2(梯度累积 ×8 等价 8 卡)实现与提交,~20 LOC
-5. 论文:叙事方案 A 等用户点头后回填;PLACEHOLDERS 回填遵循「口径统一」原则(E00 裁决影响主表口径设计)
-6. Phase 2 正式验证(/gsd-verify-work 2)在口径问题厘清后跑
+1. **用户拍板**:①停 13930/13906/13907 腾 3×L40(建议已给:复现边际价值=0);②主表三行结构(release 重评 0.123 / +改进 0.083 / V2 0.089)定案;③检索条件化 rtrans 立项与否
+2. **E09 两格**(v1_retrain_nortval / v2_ze_nortval,各 800ep)= 论文 minor-contribution 消融必需,腾卡即排
+3. **代码调查 ×2**:I1 = eval_mask 生成路径是否消费 re_dict(E04/E05 数字作废中);I2 = projector R@k 全 chance 之谜(κ 表暂缓)
+4. 论文:按升级版叙事 A(V2 对 release 全面胜)回填 45 占位符;TMR.pt 可从 AIGeeksGroup/ReMoMask 下载(E08-teacher 解除阻塞)
+5. Phase 2 正式验证(/gsd-verify-work 2)
+6. KIT/SnapMoGen 多数据集随大批次
 
 ## Blockers
 
-- E00/E00b 口径裁决(在飞,数小时)
-- 一作侧信息:0.026 的确切评估命令/脚本(E00 落锤后发问)
-- 用户拍板:13906/13907 去留;叙事方案 A;E04/E05 调查 vs 论文推进的优先级
+- 用户三项拍板(上述 Next Steps #1)——其余不阻塞
 
 ## Session Continuity
 
-**Stopped at:** 2026-07-06 深夜收数 sync 完成
+**Stopped at:** 2026-07-07 凌晨,复现归因全程收官 + handoff 完成
 
-Last session: 2026-07-06(深夜)
-**完整 handoff 见: .planning/phases/02-latent-aligned-retrieval-plan-a/.continue-here.md(顶部「深夜」段)**
-**在飞实验登记: .planning/phases/04-comprehensive-evaluation/RUNS.md(新 session 必读,顶部深夜 sync 段)**
-**口径归因档案: .planning/phases/04-comprehensive-evaluation/V1-REPRO-GAP.md(§3.8 E00 中期裁决)**
+Last session: 2026-07-07(凌晨)
+**完整 handoff 见: .planning/phases/02-latent-aligned-retrieval-plan-a/.continue-here.md(顶部 2026-07-07 段)**
+**归因终局档案: .planning/phases/04-comprehensive-evaluation/V1-REPRO-GAP.md(§3.84 三角闭合)+ DIFF-AUDIT.md(权重法证)**
+**在飞实验登记: .planning/phases/04-comprehensive-evaluation/RUNS.md**
 Resume with: /gsd-progress 或 /gsd-resume-work
-Monitor: ssh diana.acfr.usyd.edu.au "sacct -j 13906,13907,13909,13916,13917,13918,13919 --format=JobID,JobName%16,State%12,Elapsed -n | grep -v batch"
+Monitor: ssh diana.acfr.usyd.edu.au "sacct -j 13930,13906,13907 --format=JobID,JobName%16,State%12,Elapsed -n | grep -v batch"
 ⚠️ 上一 session 的进程内 Monitor 不跨 session,接手后需重挂或手动轮询。
