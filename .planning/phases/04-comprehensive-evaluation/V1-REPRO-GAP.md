@@ -112,15 +112,26 @@ rtrans 与 mtrans 唯一耦合点 = eval_res.py 完整推理(:712,mtrans 生成 
 
 **新增归因注意**:E00 的 full(~0.122)>官方 ckpt 内录 mask-only Value(0.0934)——精修反而变差?与我们 ckpt 的精修方向(0.132→0.083)相反。待 E00b 出稳定 mask-only 均值后再解读(若官方 mask-only 20 次均值其实 ~0.12-0.15,则"精修变差"是错觉,内录 Value 0.0934 只是训练期单次评的有利值)。
 
-## 3.85 差异分解表(INTERIM 2026-07-06 深夜;E00 14/20、E00b 6/20,final 出数后换正)
+## 3.84 H1 落锤(2026-07-06 深夜,E00 FINAL + 权重法证审计)
+
+**E00 final(13909,官方 mtrans ep616 + 官方 rtrans ep217,完整 pipeline ×20,我们协议)**:
+**FID 0.123±0.003** | Top1/2/3 0.485/0.676/0.777 | Matching 3.090±0.008 | Div 9.357 | **MMod 1.446±0.045**
+
+**H1 结论(推断性,证据链闭合)**:published 0.026/0.566/2.835 与 released ckpt 在一致协议下的实测(0.123/0.485/1.446)系统性不符;0.026 恰落于该 codebase 三条 FID 输出路径中唯一匹配的 GT-base 宇宙(rtrans ckpt 内录 0.02211,一作训练日志 0.0221-0.0296);MMod 双机佐证(我们链 1.446,一作自己机器 1.332)排除环境解释。**加上 DIFF-AUDIT.md 的权重法证(pristine 代码无法加载官方 ckpt、"官方代码参照系"不存在、我们的链是唯一与 released 权重结构一致的链),H1 以现有证据判定成立;表述纪律照 §3.86(不指控,诚实口径差异框架)。**
+
+**权重法证三大新事实(全文见 DIFF-AUDIT.md)**:①官方 mtrans ckpt 的 SSTA 键名与我们的 semantics_modulated.py 逐键一致、与 pristine 完全不一致;②官方 ckpt 的 cond_emb 与 seqTransEncoder2/3 处于未训练初始化状态(与我们代码的跳过/注释选择精确对齐),rtrans 侧对应模块已训练(我们也保留)——**我们的树是作者真实(未发布)代码的忠实重建**;③官方 opt.txt 含 pristine 不存在的 train_split 字段——作者真实训练代码本就不是 pristine。**D4 正式关闭**(TMR 权重 md5 同源、加载 MISSING=0、编码数学与 pristine 意图相同)。E00/E01/E02 数字全部有效。
+
+## 3.85 差异分解表(2026-07-06 深夜;full 列已 FINAL,mask 列待 E00b)
 
 **口径 2×2 矩阵(全部同一评估链,20 repeats 目标)**:
 
 | | mask-only FID↓ | full FID↓ |
 |---|---|---|
-| 官方 ckpt(ep616) | **~0.13-0.15(E00b interim,6/20)** | **~0.122(E00 interim,14/20)** |
+| 官方 ckpt(ep616) | ~0.13-0.15(E00b interim,final 待出) | **0.123±0.003(E00 FINAL ✅)** |
 | 我们 retrain(ep0316) | 0.132±0.003(E02 ✅) | 0.083±0.002(E01 ✅) |
 | published 报数 | (arXiv 0.099,疑 mask-only 单次) | **0.026** ← 两个实测格都够不着 |
+
+**训练项终局判读(基于 full 列 FINAL)**:同链同 rtrans 下,我们 retrain(0.083)**显著优于**官方 ckpt(0.123,CI 无重叠)。结合审计「v1_retrain 相对作者真实代码的已知偏差仅剩 set_epoch(+显式 rt_in_value)」——这两个偏差是**增益项**而非缺陷项。归因实验角色反转:v1_orig(13930,两偏差都还原)vs v1_retrain 的三点定位,现在量化的是"我们的两个改动各帮了多少",不再是"我们为什么差"。**H2(batch)对"差距"已无解释对象**(不存在差距),T1/T2 保持押后/取消,除非用户想把 batch 效应作为纯方法学消融。
 
 **分解(按 interim 数字)**:
 - **口径项 ≈ 0.10**(published 0.026 ↔ 官方 ckpt 同链实测 ~0.122):E00 落锤后即坐实 H1(0.026 疑= rtrans 训练日志 GT-base 宇宙 0.0221-0.0296);MModality 铁证:同 ckpt 我们链 1.39-1.54 vs 论文 2.835。
