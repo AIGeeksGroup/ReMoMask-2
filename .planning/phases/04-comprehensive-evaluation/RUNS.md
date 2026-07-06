@@ -11,7 +11,8 @@
 | V2@ep0409 | **0.110±0.004** | 0.089±0.004 | **0.508** | **0.509** |
 
 **四格解读(叙事候选,等用户拍板)**:latent 对齐在 mask 阶段带来明确增益(FID −17%,CI 无重叠;与训练期中间值 0.099/0.127 方向一致);共享 rtrans 对 V1 的精修收益(0.132→0.083,−37%)远大于对 V2(0.110→0.089,−19%),把 full FID 轻微反转;V2 的语义对齐指标(Top-k/MM-Dist)在两个口径下全部显著占优。→ 叙事选项(2026-07-06 修正):**A「增益在 coarse 阶段 + 语义对齐两口径全胜,shared-refiner 下 FID 相当」(推荐,现数据立得住)**。⚠️ 重要修正:rtrans 训练 teacher-forced 于 GT tokens、不含检索不含 mtrans → 官方 rtrans 对 V1/V2 完全对称,**不构成 confound;对称重训(E12)改变不了对照结论**,只改口径标签(锦上添花)。精修收益不对称(−37% vs −19%)是两个 mtrans 输出分布的性质差异 = finding。唯一可能改变 full FID 格局的是「检索条件化 rtrans」(架构改动 = 新贡献,scope 另议,与 Plan B 同量级)。mask-only 诊断表(tab:ablation_v2_maskonly)升级为核心证据。
-- E02 = 13900/13901 ✅;κ64=13889 ✅、κ1024=13898 ✅(R@k 待从 training_log.json 收割);z_q 库 = 13899 ✅(66912×1024,rvqvae_2d_quantized)→ E04-eval 可排。
+- E02 = 13900/13901 ✅;κ64=13889 ✅、κ1024=13898 ✅(R@k 待从 logs/query_projector_k{64,1024}/training_log.json 收割);z_q 库 = 13899 ✅(66912×1024,rvqvae_2d_quantized)。
+- **第三批已提交(2026-07-06 10:3x,persephone 4×L40)**:13902=E04-eval(z_q 换库 zero-shot,ext phase4_e04_zq)、13903/13904/13905=E05 top-k sweep(k=1/4/8,pool 16,ext phase4_e05_k*;k=2 基线复用 E02-V2)。全部 eval_mask ×20,~1h each。查询:`sacct -j 13902,13903,13904,13905 -n --format=JobID,JobName%12,State%12`;收数 grep `final result` 于各自 slurm log。
 
 ## ⚡ 2026-07-06 上午快照
 
