@@ -1,5 +1,13 @@
 # Phase 4 实验运行登记(RUNS)
 
+## ⚡⚡⚡ 2026-07-06 第四批:训练 resume + 原始代码对照(用户指示)
+
+- **13906 = V1 resume**(v1_retrain_rtval,--is_continue 自 ep1672 → 2000ep,port 12585)
+- **13907 = V2 resume**(v2_ze_rtval,--is_continue 自 ep1676 → 2000ep)
+- **13908 = v1_orig_single(新)**:原始 master 行为对照——代码副本 `~/ReMoMask-v1-orig/`(set_epoch 两处重新注释、无 rt_in_value,重资产 symlink 共享),1×L40、800ep、port 12590、seed/超参与 retrain 完全一致。**目的与读法见 V1-REPRO-GAP.md §3**(隔离代码偏差 D2+D3 对复现差距的贡献)。
+- 三者排在 13902-13905(E04-eval/E05 sweep)之后自动上卡;resume ~26h 到 2000ep,v1_orig ~64h 到 800ep。
+- 官方训练卡数:用户核实中(V1-REPRO-GAP.md §2 D1,per-rank batch 语义已有代码证据 transformer_trainer_ddp.py:162)。
+
 > 每个 job 完成后:回收产出 → 回填 PLACEHOLDERS.md 对应条目 → 本表打勾。
 > 2026-07-05 首批提交。协议:cond_scale=4 / time_steps=10 / seed=10107,ckpt 显式 ep 后缀。
 
