@@ -45,6 +45,16 @@ mask-only 口径同样存在差距(官方 ckpt 单次 ~0.102 vs retrain 20-rep 0
 读法:**≈0.026 → 评估链路忠实,差距全在训练侧;显著更差 → 评估协议有偏,0.083/0.089 需重新校准**。
 (注:arXiv 版 0.099 与 mask-only 0.102 数值巧合接近,疑似 arXiv 即 mask-only 口径,待团队确认。)
 
+## 3.6 一作侧锚点(2026-07-06,用户从一作处取得的历史截图)
+
+一作本人评官方 pretrain_mtrans(eval_mask,repeat=1,cond_scale=4,time_steps=10,which_epoch=net_best_fid.tar,路径 /data/AI4E/lzd/AAAI/ReMoMaskV2/ReMoMask_open/ReMoMask):
+**FID 0.083,Div 9.632,Top1/2/3 = 0.503/0.692/0.784,Matching 3.044,MMod 1.332**。
+
+推论:
+1. **协议确认**:一作用 cond4/steps10 → 我们全部 eval 的协议与官方一致(此前为假设,现闭环);
+2. **官方 ckpt 的 mask-only 宇宙 ≈ 0.08-0.10**(一作 0.083 vs 我们同 ckpt 0.102,均单次,含单次方差)→ **论文 0.026 只能是 full-pipeline 口径**,E00(13909)为裁决实验;
+3. 复现差距重校准:retrain mask-only 0.132 vs 官方 0.083-0.102,训练侧差距 ~0.03-0.05(非对 0.026 想象的量级);一作 0.083 vs 我们 0.102 的 ~0.02 可能含环境差,以 E00 full 口径定论。
+
 ## 4. 决策记录
 
 - 训练 resume(2026-07-06,用户指示):13845/13846 TIMEOUT 于 ep1676/1672 后,按用户要求 `--is_continue` 续训至 2000ep(尽管 best 已定型;完整性/官方对齐用途)。
