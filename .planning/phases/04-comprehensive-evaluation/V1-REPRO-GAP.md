@@ -91,3 +91,10 @@ mask-only 口径同样存在差距(官方 ckpt 单次 ~0.102 vs retrain 20-rep 0
 **ECCV tab:ablation(训练版)直接证据:K 全开 + V={R_t,R_m} 配置 FID 0.104 vs V={R_m} 0.027(官方协议)**——semantic 空间 R_t 进 Value 训练后代价 4 倍。我们的 v1_retrain_rtval 正是该配置,所得 0.083(full)/0.132(mask-only)与 0.104 量级吻合 → **rt_in_value(训练版)为复现差距的重大嫌疑,与 D1(batch)并列**。
 三点定位拆 D2/D3(零新增实验):v1_retrain(rt✓,se✓)/ v1_orig 13908(rt✗,se✗)/ E09-Semantic✗(rt✗,se✓)。
 叙事影响:若坐实,4.7「前提变化」反成最强版本(semantic 训练有害、z_e 待 E09 z_e✗ 格检验);V2 的 rtval 配置可能非最优,E09 关键性再升。
+
+## 3.7 rtrans 训练期 eval 口径揭示(2026-07-06,一作截图 #2 + 代码核实)
+
+一作 rtrans 训练日志(20260211_1910_rtrans_train_0):Eval FID 0.0276-0.0296,**best "FID remains 0.02211"** —— 0.026 宇宙出现于此。
+**代码口径(eval_t2m_ddp.py:394 evaluation_res_transformer)**:GT motion → vq_model.encode(:450)→ 取 GT base 层 tokens(code_indices[...,0])→ rtrans 仅预测残差层(:457-464)→ 解码算 FID。**全程无 mtrans,= "GT-base + 精修"的上限诊断口径,非文本生成性能**。
+rtrans 与 mtrans 唯一耦合点 = eval_res.py 完整推理(:712,mtrans 生成 base → rtrans 精修)。
+**两种假设,E00(13909)裁决**:A)论文 0.026 来自完整 pipeline(E00≈0.026 则成立);B)论文 0.026 混淆了 GT-base 口径(E00 显著更高则可能性大增 → 期刊版必须换正确口径报数)。此发现同时解释 arXiv 版 Table1 0.099 vs Table4 0.411 的口径混杂迹象。
