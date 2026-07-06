@@ -45,6 +45,14 @@ mask-only 口径同样存在差距(官方 ckpt 单次 ~0.102 vs retrain 20-rep 0
 读法:**≈0.026 → 评估链路忠实,差距全在训练侧;显著更差 → 评估协议有偏,0.083/0.089 需重新校准**。
 (注:arXiv 版 0.099 与 mask-only 0.102 数值巧合接近,疑似 arXiv 即 mask-only 口径,待团队确认。)
 
+## 3.55 代码基线确认(2026-07-06,一作口径)
+
+**master branch = 官方最终版代码**(一作确认)。后果:
+- 偏差清单 D1-D4 即「我们 retrain vs 官方训练」的**完备差异集**,无隐藏内部版本;
+- **D4 基本关闭**:官方库亦由 master 的 build_rag_database.py + 官方 Part_TMR ckpt 构建,我们的全量重建同码同 ckpt 同数据 → 理应等价;
+- **D3 确认**:官方 0.026 确实在 set_epoch 注释状态下训出;v1_orig_single(13908)忠实复刻该状态;
+- 嫌疑收敛:**D1(卡数/有效 batch,用户核实中)+ 评估侧(E00 裁决中)**。
+
 ## 3.6 一作侧锚点(2026-07-06,用户从一作处取得的历史截图)
 
 一作本人评官方 pretrain_mtrans(eval_mask,repeat=1,cond_scale=4,time_steps=10,which_epoch=net_best_fid.tar,路径 /data/AI4E/lzd/AAAI/ReMoMaskV2/ReMoMask_open/ReMoMask):
