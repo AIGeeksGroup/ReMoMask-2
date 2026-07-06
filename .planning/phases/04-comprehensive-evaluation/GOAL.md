@@ -1,123 +1,86 @@
-# GOAL — ReMoMask-2 TPAMI 实验闭环(2026-07-06 深夜版)
+# GOAL — 复现差异归因:一作/官方发表数字 vs 我们的复现(聚焦版,2026-07-06)
 
-> 本文档是可直接投喂新 session / 自主 loop 的 goal prompt。配套事实档案:RUNS.md(运行登记)、V1-REPRO-GAP.md(口径归因)、EXPERIMENTS-SPEC.md(E 系列定义)、../../paper-v2/PLAN-A-FACTS.md(论文事实源)。
-
----
-
-## 一、北极星(最重要目标)
-
-**产出一套口径自洽、经得起 TPAMI 审稿的主表 + 消融表数字,支撑两个贡献的叙事:**
-1. **Plan A(latent-aligned retrieval)**= 主贡献,叙事方案 A:「增益发生在检索真正作用的 coarse 生成阶段(mask-only FID −17%,CI 无重叠)+ 语义对齐指标两口径全胜;shared-refiner 口径下 FID 相当」;
-2. **rt_in_value** = 独立 minor contribution,以 {Part_TMR, z_e} × {rt on/off} 正交消融呈现。
-
-**成功判据(全部满足即收官):**
-- [ ] 论文三张主表 + 四张消融表的 45 个占位符全部回填,且**全表单一口径**(our protocol, 20 repeats),published 0.026 只在文字/脚注中说明;
-- [ ] 0.026 口径之谜有结论(假设 A/B 落锤 + 与一作对齐确认);
-- [ ] 每个引用的数字可追溯到 RUNS.md 里一个具体 job 的 log;
-- [ ] E09 补齐 2×2 正交消融;E06/E05 或有替代结论(取决于 I1 调查);
-- [ ] 叙事方案 A 经用户点头后写入正文。
-
-**当前关键路径上的两个最高优先级:**
-1. **E00/E00b 落锤 0.026 口径**——它决定主表报数方式和与一作的对话内容(中期已强烈指向:官方 ckpt 在我们链下 ~0.122,论文 0.026 疑为 rtrans 训练日志的 GT-base 诊断口径);
-2. **I1 调查(eval 期检索是否生效)**——它决定 E04/E05/E06 整块 zero-shot 实验设计是否成立;若坐实"推理期检索无效",既是 bug 也可能是重要 finding(检索=训练期正则),会改写方法叙事。
+> 单一目标的 goal prompt,可直接投喂新 session。配套档案:V1-REPRO-GAP.md(归因主档案,必读)、RUNS.md(job 登记)。
+> 宽版实验闭环(E04-E09/论文回填/大服务器批)**不在本 goal scope 内**,见 git 历史 db3b4c9 与 RUNS.md 待排段。
 
 ---
 
-## 二、当前态势快照(2026-07-06 深夜)
+## 一、要回答的唯一问题
 
-### 已坐实、可引用的数字(全部 20 repeats,协议 cond4/steps10/seed10107)
-| 实验 | 结果 |
-|---|---|
-| E01 full(共享官方 rtrans) | V1@ep0316 **0.083±0.002** / V2@ep0409 0.089±0.004;V2 语义指标全胜(Top1 0.509 vs 0.497,MM-Dist 2.962 vs 3.061) |
-| E02 mask-only | V1 0.132±0.003 / V2 **0.110±0.004**(−17%,CI 无重叠);Top1 0.508 vs 0.488 |
-| E03 秩相关 | ρ=0.58±0.16(median 0.63);overlap@1/5/10/50 = 18.0/18.1/18.5/24.1% |
-| 训练终局 | 13845/13846 TIMEOUT@ep1676/1672;best 坐实 V2 0.0991@ep0409 / V1 0.1273@ep0316(mask-only 单次口径) |
+**published V1(FID 0.026 / Top1 0.566 / MMod 2.835)与我们复现(0.083 / 0.497 / 1.389)之间的差异,到底来自哪里?**
 
-### 作废/冻结的数字(调查完成前禁止引用)
-- **E04(z_q 换库)、E05(top-k sweep)**:四配置结果字节级相同 → 等 I1;
-- **κ64/κ1024 R@k**:全部 chance 水平(~2e-05)→ 等 I2;
-- **一切单次 eval FID 对比**(同 ckpt 三个单次 0.083/0.102/0.160,方差 2 倍)。
+把差异完全分解到四个可裁决的桶里,每桶落锤:
 
----
-
-## 三、工作队列
-
-### A. 在跑(只需监控 + 收数)
-| Job | 内容 | 读法 |
-|---|---|---|
-| 13909 | **E00**:官方 mtrans+rtrans full ×20(hades L4) | final ≈0.026 → 假设 A(评估链忠实);≈0.12 → 假设 B 落锤(0.026=GT-base 口径),期刊版全表换 our-protocol 口径 |
-| 13918 | **E00b**:官方 ckpt mask-only ×20(hades L4) | 补齐「官方/我们 × mask/full」2×2;官方 mask-only 稳定均值若 ~0.12-0.15,则我们 retrain 0.132 与官方**无显著训练差距**,D1(batch)进一步降级 |
-| 13916 | **v1_orig_single**(800ep,persephone) | 与 v1_retrain 唯一差 = 无 rt_in_value + set_epoch 注释;best 若 ~0.09-0.10 → rt_in_value 训练版有害坐实(D2);若 ~0.13 → 代码偏差无罪 |
-| 13917 | **T1 v1_lowlr**(lr 2.5e-5,800ep,persephone) | mask-only best 显著 <0.132 → 噪声地板假说立(batch 承重);不动 → batch 假说重伤 |
-| 13906/13907 | V1/V2 resume → 2000ep(persephone ×2) | 无望刷新 best;13907 吃了污染数据;**默认跑完即弃,或按用户指示 scancel 释放 2×L40** |
-| 13919 | encoded_texts.npy 恢复(CPU) | 完成即验证 grep 'restored' |
-
-**收数纪律:任何 job 提交后必须验证存活 ≥2 分钟**(13908/13910 秒崩被当"在跑"的教训);FAILED 立即查日志修复重交。
-
-### B. 就绪可跑(前置齐,排队即可)
-| 实验 | 内容 | 前置 | 预计 |
+| 桶 | 假设 | 裁决实验 | 状态 |
 |---|---|---|---|
-| E09(压轴,**最后跑**) | 2×2 缺格:v1_retrain_nortval + v2_ze_nortval,800ep 截断协议 | 2×L40 空闲(等 resume/归因训练腾卡) | ~2.7 天 |
-| 效率图 | 方案 A:整图 L40 重测(V1/V2 推理时延/显存) | 任一 L40 | 小时级 |
+| H1 评估口径 | 论文 0.026 混淆了 rtrans 训练日志的 GT-base 诊断口径(0.0221-0.0296 宇宙),非真实 text-to-motion full pipeline | **E00**(13909,官方 ckpt full ×20)+ **E00b**(13918,官方 ckpt mask-only ×20) | 在跑;中期 10/20 强指向成立(官方 full ~0.122,MMod 1.39) |
+| H2 训练规模 | 官方 8 卡有效 batch 512 vs 我们 64,lr 未缩放 → 优化质量差(噪声地板 lr/batch) | **T1**(13917,lr 2.5e-5 匹配官方噪声比)+ **T2**(梯度累积 ×8,~20 LOC 待实现,数学等价 8 卡,决定性) | T1 在跑;T2 待实现 |
+| H3+H4 代码偏差 | 训练版 rt_in_value 有害(ECCV tab:V+={R_t} 0.104 vs 0.027)± set_epoch 修复的影响 | **v1_orig**(13916,无 rtval + set_epoch 注释,忠实 master 行为,800ep) | 在跑(秒崩修复后 07-06 深夜才真正开始) |
+| H5 环境差 | 同 ckpt 同命令在两台机器上的系统性偏移 | 单次对比已作废(0.083/0.102/0.160 方差 2 倍);以 **E00b 20 次均值 vs 一作 0.083 单次**给出带噪声界的估计 | E00b 在跑 |
 
-### C. 需准备(代码/资产前置,先做前置再提交)
-| 项 | 前置工作 | 决定什么 |
-|---|---|---|
-| **I1 调查**(高优) | 读 eval_mask.py → generate()/forward 链,确认 re_dict 是否传入并参与生成;若没传 = bug 修复后 E04/E05 重跑;若传了但无效 = finding,E04/E05 换设计 | E04/E05/E06 整块命运 + 方法叙事 |
-| **I2 调查** | 读 train_query_projector.py 的 R@k 实现;跑 teacher(BMM)自身 R@1 基准;判断是指标问题还是 projector 问题 | κ 表(E08-κ)命运;alignment 叙事的证据链 |
-| **T2**(梯度累积) | trainer 加 grad-accum ×8,~20 LOC,单卡数学等价 8 卡 batch512 | 「换多卡能否拉回 gain」的决定性证伪(用户关键质疑) |
-| E06 coverage | 写 subsample_database.py → database_ze_p{10,25,50,75};⚠️ 依赖 I1 结论(eval 期检索无效则设计失效) | 检索库规模 → 质量曲线 |
-| E08-objective / E08-capacity | projector 变体训练;**必须隔离输出目录**(--database_ze_path 指到副本或改输出逻辑,污染教训) | 对齐目标/容量消融表 |
-| E08-teacher | **阻塞:TMR ckpt 人工下载** | teacher 消融 |
-| 大服务器批 | 完整协议复刻:global batch 512 × 2000ep × lr 2e-4;V2(+可选 V1 验证)重训;KIT + SnapMoGen 三数据集 | 与 published 同宇宙的主表数字(若口径裁决后仍需要);多数据集泛化表 |
-
-### D. 阻塞/等外部输入
-| 项 | 等谁 | 内容 |
-|---|---|---|
-| 0.026 评估命令对齐 | 一作(E00 落锤后发问) | 问题清单:用哪个脚本/ext/repeat 数/MModality 怎么算;E00+E00b+MModality(1.39 vs 2.84 同 ckpt)是铁证材料 |
-| 叙事方案 A 点头 | 用户 | 点头后回填论文叙事段 |
-| 13906/13907 去留 | 用户 | 建议 scancel(无望刷新 + 13907 污染 + 释放 2×L40 给 E09) |
-| 检索条件化 rtrans 立项 | 用户 | 唯一可能改变 full FID 格局的路径;新贡献量级,scope 决策 |
-| 杂项拍板 | 用户 | HumanML3D.zip 公开 HF(AMASS 许可)/codebook 512-1024 核对(pami.tex L1674)/检索表 ReMoMask-2 行去留/G 批代码 commit |
+**已确认、不再是问题的**:代码基线(master=官方最终版,一作)、检索库 D4(同码同 ckpt 重建,等价)、评估协议参数(cond4/steps10,与一作截图逐项核验一致,--vq_name inert)、8 卡事实(一作)。
 
 ---
 
-## 四、裁决树(实验间逻辑,按此推进)
+## 二、成功判据(全部满足即本 goal 收官)
+
+- [ ] **E00 final + E00b 出数**,H1 落锤:0.026 的口径定性有结论;
+- [ ] **差异分解表**写进 V1-REPRO-GAP.md:published↔官方 ckpt 实测(口径项)| 官方 ckpt↔我们 retrain 同链实测(训练+代码项,注意中期方向是我们**反超**)| 残余(环境/噪声项),每项带数字和出处 job;
+- [ ] **v1_orig 训练曲线可判读**(≥300ep 或 best 已稳):H3 有罪/无罪结论;若 v1_orig≈retrain 则 H3+H4 打包无罪,无需再拆;
+- [ ] **T1 可判读**,且 **T2 已实现并提交**(T2 出数不阻塞收官,但必须在跑);
+- [ ] **「与一作对齐」证据包**成稿(见 §四),问题清单待用户转达;
+- [ ] **期刊版报数口径建议**成稿,给用户拍板(全表 our-protocol / 引用 published + 脚注说明 / 混合方案的利弊)。
+
+**明确不在 scope**:E04/E05 检索无效调查(独立警报,另立 goal)、κ/R@k 之谜、E06/E08/E09、论文叙事回填、大服务器复刻的执行(它是本 goal 结论的下游动作)、Plan B、KIT/SnapMoGen。
+
+---
+
+## 三、裁决逻辑(按此读数,防误归因)
 
 ```
-E00 + E00b(口径 2×2)
- ├─ ≈0.026 → 假设 A:评估链忠实 → 差距在训练侧 → D1/D2 归因加权 → 大服务器复刻必要性↑
- └─ ≈0.12(中期指向)→ 假设 B:0.026=GT-base 口径 → 全表 our-protocol 口径
-     → 与一作对齐 → 主表口径重设计 → 大服务器复刻降级为可选
+E00 final:
+ ├─ ≈0.026 → H1 不成立,评估链忠实 → 差距全在训练侧 → H2/H3 承重,权重↑
+ └─ ≈0.12(中期指向)→ H1 成立 → "复现差距"重定义:
+      published 0.026 是够不着的口径 → 真正要解释的只剩:
+      ①官方 ckpt vs 我们 retrain 的 mask-only 差(0.132 vs 官方稳定均值,等 E00b)
+      ②MModality 1.39 vs 2.84(同 ckpt → 纯口径/协议差,H2/H3 无关)
 
-I1(eval 期检索有效性)
- ├─ re_dict 没传/没用 = bug → 修复 → E04/E05 重跑 → E06 照计划
- └─ 确认推理期无效 = finding → E04/E05/E06 换设计(如训练期干预)→ 叙事加「检索=训练期正则」
+E00b(官方 mask-only ×20):
+ ├─ ≈0.09-0.10(接近内录 Value 0.0934)→ 我们 retrain 0.132 确有训练差 → H2/H3 去解释这 ~0.03-0.04
+ └─ ≈0.12-0.15 → 连 mask-only 训练差都不存在(内录 0.0934 只是训练期有利单次)→ H2/H3 无对象,归因结束
 
-13916(v1_orig)× 13917(T1)× E09-nortval 格(三点定位)
- ├─ v1_orig ≈0.09-0.10 → D2(训练版 rt_in_value 有害)坐实 → rt_in_value 叙事改写(ECCV tab 张力化解:z_e 空间才无害)
- ├─ v1_orig ≈0.13 且 T1 显著变好 → D1(噪声地板)承重 → T2 决定性验证 → 大服务器复刻支撑
- └─ 两者都不动 → 残余差距归环境/未知,以 E00b 口径矩阵封口
+v1_orig(13916):
+ ├─ best ≈0.09-0.11 → H3 坐实(训练版 rt_in_value 在 semantic 空间有害)→ 同时是论文素材(与 ECCV tab 一致,z_e 空间的重新审视叙事成立)
+ └─ best ≈0.13 → H3+H4 无罪 → 差(若存在)归 H2
+
+T1/T2:
+ ├─ T1 best 显著 <0.132 → 噪声地板机制实锤 → T2 量化"8 卡等价"能拉回多少
+ └─ T1 不动 → H2 重伤 → 用户直觉("batch 拉不回")胜
 ```
 
----
-
-## 五、硬约束(违反即报废)
-
-**评估协议**:cond_scale=4 / time_steps=10 / seed=10107 / **20 repeats 起**;ckpt 一律显式 ep 后缀(net_best_fid_ep0409/ep0316;无后缀文件已被 resume 污染)。
-**集群纪律**:erinyes 禁用;persephone L40 优先(mem ≤15G/job);hades 只用 L4(gres=gpu:L4:1),不碰 A40;不挤占他人队列;磁盘 /home 97%,大产物先清后写。
-**sbatch 纪律**:必须 set -e;提交后验证存活 ≥2 min;显式传全超参(不依赖默认值);变体训练用隔离输出目录。
-**数据完整性**:database_ze/encoded_texts.npy 是共享资产,任何会写它的脚本必须重定向;本地 database/ 是 32 条 stub,BMM 相关只能远程跑。
-**git**:commit 不带 AI 署名;推送 `git push origin master:tpami-workspace`。
+**读数纪律**:任何 FID 结论只用 20-repeat 均值;单次只做方向参考;比较必须同口径同协议;v1_orig/T1 是 800ep 截断协议,与 retrain 比较时用相同 epoch 窗口的 best。
 
 ---
 
-## 六、每轮循环动作(自主运行时)
+## 四、「与一作对齐」证据包(E00/E00b 落锤后整理)
 
-1. `sacct` 查在飞 job(当前:13906/13907/13909/13916/13917/13918/13919)→ 完成的收数、FAILED 的修复重交(修复后验证存活);
-2. 新数字 → 更新 RUNS.md(+V1-REPRO-GAP.md 若涉口径)→ 按裁决树推进下一步(排 B 队列 / 做 C 前置);
-3. 触发决策门(E00 落锤 / I1 结论 / v1_orig 出数)→ 整理证据 + 推荐方案,**打断汇报用户**;
-4. 每轮收尾:commit + push;PLACEHOLDERS.md 有可回填项则回填并删条目;
-5. 上下文 >65% → 更新 .continue-here.md + STATE.md 交接后收口。
+**给用户转达一作的问题清单(草稿):**
+1. 论文 Table 的 0.026±0.002 是用哪个脚本、哪条命令跑出来的?(eval_res.py?repeat 几次?哪个 ext?)
+2. 是否可能取自 rtrans 训练日志的 eval(GT base tokens 口径,log 里 0.0221-0.0296)?
+3. MModality 2.835 怎么算的?(我们同 ckpt 全 pipeline 20 次只得 ~1.39,同一评估器)
+4. 方便的话给一份当年 full-pipeline eval 的原始 log / opt 快照。
 
-**打断用户的门槛**(其余自主推进):口径裁决落锤、任何"作废级"新警报、需要花钱/大算力的决策、叙事级改写。
+**随附证据**(全部有 job log 可查):E00 final 数字、E00b 数字、13915 逐字复刻 0.160、rtrans ckpt 内录 Value 0.02211 与训练日志截图吻合、eval 参数逐项核验记录(V1-REPRO-GAP §4)。
+**语气**:内部对齐口径,不是 challenge——先假定 0.026 有一个我们没想到的合法来源。
+
+---
+
+## 五、在飞与待办(本 goal 范围内)
+
+**在跑**:13909(E00,收 final)、13918(E00b)、13916(v1_orig)、13917(T1)、13919(数据恢复,顺手确认)。
+**待实现**:T2 梯度累积(~20 LOC,transformer_trainer_ddp.py,实现→冒烟→提交 800ep)。
+**监控命令**:`ssh diana.acfr.usyd.edu.au "sacct -j 13909,13916,13917,13918,13919 --format=JobID,JobName%16,State%12,Elapsed -n | grep -v batch"`
+**收数纪律**:job 提交后验证存活 ≥2 min(13908/13910 秒崩教训);FAILED 即修即重交;每次收数更新 V1-REPRO-GAP.md + RUNS.md → commit → `git push origin master:tpami-workspace`(不带 AI 署名)。
+**周边约束**:erinyes 禁用;hades 只用 L4;persephone mem ≤15G;磁盘 97% 注意清理;13906/13907(resume)不属于本 goal,去留等用户。
+
+**打断用户的时机**:E00/E00b 落锤(带口径建议方案)、v1_orig 出可判读结果、证据包成稿、任何"作废级"意外。其余自主推进。
