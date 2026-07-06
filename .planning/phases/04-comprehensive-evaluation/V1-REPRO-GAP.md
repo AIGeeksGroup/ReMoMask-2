@@ -78,6 +78,13 @@ mask-only 口径同样存在差距(官方 ckpt 单次 ~0.102 vs retrain 20-rep 0
 2. **官方 ckpt 的 mask-only 宇宙 ≈ 0.08-0.10**(一作 0.083 vs 我们同 ckpt 0.102,均单次,含单次方差)→ **论文 0.026 只能是 full-pipeline 口径**,E00(13909)为裁决实验;
 3. 复现差距重校准:retrain mask-only 0.132 vs 官方 0.083-0.102,训练侧差距 ~0.03-0.05(非对 0.026 想象的量级);一作 0.083 vs 我们 0.102 的 ~0.02 可能含环境差,以 E00 full 口径定论。
 
+## 3.99 权重来源核验(2026-07-06 深夜,用户问询触发)
+
+- 我们的权重下载自 **lycnight/ReMoMask**(download_all.sh: snapshot_download);经 HF API 对比,与官方 **AIGeeksGroup/ReMoMask**(lastModified 2026-02-14,与 rtrans 训练日志 20260211 同期)**同一套权重**——mtrans/rtrans/vq/Part_TMR 四个关键 ckpt 字节数逐一相同 → 等效官方来源,无权重版本疑虑;
+- AIG 官方仓库自带 `exp_for_mtrans/.hydra/config.yaml`:**text_encoder: ViT-B-32.pt、512d、train_text_encoder: false** —— 官方口径直接背书"released 权重 = CLIP 血统"(§3.96/3.84 结论再获独立确认);
+- 两仓库所含 train.log / eval.log(pretrain_mtrans、pretrain_rtrans、pretrain_vq)经检验**全部为 0 字节占位符** —— 作者原始训练/评估日志未随 release 保留,0.026 的直接出处证据不存在,归因维持 §3.85 推断性终局(证据链已闭合,无需其它来源);
+- **彩蛋:AIG 仓库含 `TMR.pt`** —— E08-teacher 此前阻塞于"TMR ckpt 人工下载",现可直接 `hf_hub_download(repo_id='AIGeeksGroup/ReMoMask', filename='TMR.pt')` 解除阻塞。
+
 ## 4. 决策记录
 
 - 训练 resume(2026-07-06,用户指示):13845/13846 TIMEOUT 于 ep1676/1672 后,按用户要求 `--is_continue` 续训至 2000ep(尽管 best 已定型;完整性/官方对齐用途)。
