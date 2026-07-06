@@ -84,3 +84,10 @@ mask-only 口径同样存在差距(官方 ckpt 单次 ~0.102 vs retrain 20-rep 0
 - 官方卡数与 0.026 确切协议:**用户内部核实中**;结果决定大服务器复刻配置(8 卡 × per-rank 64?)。
 
 **参数一致性核验(2026-07-06)**:我方 eval 与一作截图逐项比对——cond_scale/time_steps/seed/温度/topkr/评估 batch 全一致;VQ 走 mtrans opt.txt 记录(eval_mask.py:124,CLI --vq_name 无效,双方等价);差异仅 repeat(我 20 vs 他 1,更严)与按模型配 rt_in_value(正确)。注意 time_steps 代码默认 18,双方均显式传 10。
+
+## 3.59 D2 嫌疑升级(2026-07-06,用户质疑触发,更正此前误判)
+
+**此前 D2 行写"zero-cost 证据显示有益,不应致差"是偷换概念**——那是推理期开关;带训练是另一回事。
+**ECCV tab:ablation(训练版)直接证据:K 全开 + V={R_t,R_m} 配置 FID 0.104 vs V={R_m} 0.027(官方协议)**——semantic 空间 R_t 进 Value 训练后代价 4 倍。我们的 v1_retrain_rtval 正是该配置,所得 0.083(full)/0.132(mask-only)与 0.104 量级吻合 → **rt_in_value(训练版)为复现差距的重大嫌疑,与 D1(batch)并列**。
+三点定位拆 D2/D3(零新增实验):v1_retrain(rt✓,se✓)/ v1_orig 13908(rt✗,se✗)/ E09-Semantic✗(rt✗,se✓)。
+叙事影响:若坐实,4.7「前提变化」反成最强版本(semantic 训练有害、z_e 待 E09 z_e✗ 格检验);V2 的 rtval 配置可能非最优,E09 关键性再升。
