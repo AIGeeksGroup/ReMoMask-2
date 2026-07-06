@@ -82,3 +82,5 @@ mask-only 口径同样存在差距(官方 ckpt 单次 ~0.102 vs retrain 20-rep 0
 
 - 训练 resume(2026-07-06,用户指示):13845/13846 TIMEOUT 于 ep1676/1672 后,按用户要求 `--is_continue` 续训至 2000ep(尽管 best 已定型;完整性/官方对齐用途)。
 - 官方卡数与 0.026 确切协议:**用户内部核实中**;结果决定大服务器复刻配置(8 卡 × per-rank 64?)。
+
+**参数一致性核验(2026-07-06)**:我方 eval 与一作截图逐项比对——cond_scale/time_steps/seed/温度/topkr/评估 batch 全一致;VQ 走 mtrans opt.txt 记录(eval_mask.py:124,CLI --vq_name 无效,双方等价);差异仅 repeat(我 20 vs 他 1,更严)与按模型配 rt_in_value(正确)。注意 time_steps 代码默认 18,双方均显式传 10。
