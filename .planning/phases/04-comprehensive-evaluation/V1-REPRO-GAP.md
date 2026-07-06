@@ -119,7 +119,9 @@ rtrans 与 mtrans 唯一耦合点 = eval_res.py 完整推理(:712,mtrans 生成 
 
 **H1 结论(推断性,证据链闭合)**:published 0.026/0.566/2.835 与 released ckpt 在一致协议下的实测(0.123/0.485/1.446)系统性不符;0.026 恰落于该 codebase 三条 FID 输出路径中唯一匹配的 GT-base 宇宙(rtrans ckpt 内录 0.02211,一作训练日志 0.0221-0.0296);MMod 双机佐证(我们链 1.446,一作自己机器 1.332)排除环境解释。**加上 DIFF-AUDIT.md 的权重法证(pristine 代码无法加载官方 ckpt、"官方代码参照系"不存在、我们的链是唯一与 released 权重结构一致的链),H1 以现有证据判定成立;表述纪律照 §3.86(不指控,诚实口径差异框架)。**
 
-**权重法证三大新事实(全文见 DIFF-AUDIT.md)**:①官方 mtrans ckpt 的 SSTA 键名与我们的 semantics_modulated.py 逐键一致、与 pristine 完全不一致;②官方 ckpt 的 cond_emb 与 seqTransEncoder2/3 处于未训练初始化状态(与我们代码的跳过/注释选择精确对齐),rtrans 侧对应模块已训练(我们也保留)——**我们的树是作者真实(未发布)代码的忠实重建**;③官方 opt.txt 含 pristine 不存在的 train_split 字段——作者真实训练代码本就不是 pristine。**D4 正式关闭**(TMR 权重 md5 同源、加载 MISSING=0、编码数学与 pristine 意图相同)。E00/E01/E02 数字全部有效。
+**权重法证三大新事实(全文见 DIFF-AUDIT.md)**:①官方 mtrans ckpt 的 SSTA 键名与我们的 semantics_modulated.py 逐键一致、与 pristine 完全不一致;②官方 ckpt 的 cond_emb 与 seqTransEncoder2/3 处于未训练初始化状态(与我们代码的跳过/注释选择精确对齐),rtrans 侧对应模块已训练(我们也保留);③官方 opt.txt 含 pristine 不存在的 train_split 字段。**D4 正式关闭**(TMR 权重 md5 同源、加载 MISSING=0、编码数学与 pristine 意图相同)。E00/E01/E02 数字全部有效。
+
+**表述修正(2026-07-06 深夜,用户澄清 + 全历史检索定案)**:master = 一作最终版代码,已全部 release(用户确认,无隐藏代码)。git 全历史(18 commits)检索证实 info_mlp 版 SSTA / CLIP 版 Part_TMR **从未出现在任何公开 commit** → **released checkpoints 训练自「训练→开源之间被重构掉的更早内部代码状态」**,该快照未进入版本历史(推断为无意,训后清理重构属常见操作)。正确表述:"released 代码(master)与 released 权重来自不同代码状态,二者互不兼容(实证:pristine 无法加载 ckpt;历史检索:匹配代码不在任何 commit)";我们的树是**当前唯一存在的、与 released 权重结构一致的可运行实现**(权重法证认证)。实操结论不变:v1_orig(13930)= 正确复现载体。
 
 ## 3.85 差异分解表(2026-07-06 深夜;full 列已 FINAL,mask 列待 E00b)
 
