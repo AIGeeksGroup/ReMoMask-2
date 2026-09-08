@@ -1,6 +1,6 @@
 # <img src="./assets/remomask_logo.png" alt="ReMoMask logo" width="30"/> ReMoMask-2: Latent Retrieval-Augmented Masked Motion Generation
 
-> Yiran Wang\*, [Zeyu Zhang](https://steve-zeyu-zhang.github.io/)\*<sup>†</sup>, Ling Shao, and [Hao Tang](https://ha0tang.github.io/)<sup>‡</sup>
+> [Yiran Wang](https://scholar.google.com/citations?user=eg_nBF0AAAAJ&hl=en)\*, [Zeyu Zhang](https://steve-zeyu-zhang.github.io/)\*<sup>†</sup>, [Ling Shao](https://ling-shao.github.io/), and [Hao Tang](https://ha0tang.github.io/)<sup>‡</sup>
 >
 > \*Equal contribution. <sup>†</sup>Project lead. <sup>‡</sup>Corresponding author.
 >
