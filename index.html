@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="ReMoMask-2: Latent Retrieval-Augmented Masked Motion Generation.">
+  <title>ReMoMask-2: Latent Retrieval-Augmented Masked Motion Generation</title>
+  <style>
+    :root {
+      --pkured: #8f1d2c;
+      --pkured-dark: #5f0e19;
+      --paper: #fffdf9;
+      --ink: #201a1a;
+      --muted: #766d6c;
+      --line: #e4d8d5;
+      --soft-red: #f8edef;
+      --max-width: 1580px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--paper);
+    }
+
+    body {
+      min-width: 320px;
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, rgba(143, 29, 44, 0.05), transparent 360px),
+        var(--paper);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .page-shell {
+      width: min(var(--max-width), 92vw);
+      margin: 0 auto;
+    }
+
+    .topbar {
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 253, 249, 0.9);
+    }
+
+    .topbar-inner {
+      display: flex;
+      min-height: 70px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .wordmark {
+      color: var(--pkured);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.76rem;
+      font-weight: 900;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    .topbar-label {
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.67rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .hero {
+      padding: clamp(78px, 11vw, 160px) 0 clamp(68px, 9vw, 120px);
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 24px;
+      color: var(--pkured);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      width: 34px;
+      height: 3px;
+      content: "";
+      background: var(--pkured);
+    }
+
+    h1 {
+      max-width: 1260px;
+      margin: 0;
+      color: var(--ink);
+      font-size: clamp(2.4rem, 5.25vw, 7rem);
+      font-weight: 850;
+      letter-spacing: -0.065em;
+      line-height: 0.95;
+    }
+
+    .title-accent { color: var(--pkured); }
+
+    .hero-authors {
+      max-width: 1060px;
+      margin: 30px 0 0;
+      color: var(--ink);
+      font-size: clamp(1rem, 1.35vw, 1.3rem);
+      line-height: 1.65;
+    }
+
+    .hero-authors strong { font-weight: 760; }
+
+    .author-link {
+      color: inherit;
+      text-decoration: none;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 4px;
+    }
+
+    .author-link:hover,
+    .author-link:focus-visible {
+      color: var(--pkured);
+      text-decoration: underline;
+    }
+
+    .hero-affiliations,
+    .hero-contributions {
+      max-width: 1060px;
+      margin: 9px 0 0;
+      color: var(--muted);
+      font-size: clamp(0.82rem, 1vw, 0.98rem);
+      line-height: 1.65;
+    }
+
+    .hero-contributions {
+      color: var(--pkured-dark);
+      font-size: 0.76rem;
+    }
+
+    .hero-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 27px;
+    }
+
+    .hero-button {
+      display: inline-flex;
+      min-width: 104px;
+      min-height: 42px;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 18px;
+      border: 1px solid var(--pkured);
+      color: #fff;
+      background: var(--pkured);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.68rem;
+      font-weight: 850;
+      letter-spacing: 0.1em;
+      text-decoration: none;
+      text-transform: uppercase;
+      transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+    }
+
+    .hero-button:hover,
+    .hero-button:focus-visible {
+      color: var(--pkured);
+      background: transparent;
+      transform: translateY(-2px);
+    }
+
+    main { border-top: 1px solid var(--line); }
+
+    .comparison-section {
+      padding: clamp(64px, 8vw, 118px) 0 126px;
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 42px;
+    }
+
+    h2 {
+      margin: 0;
+      color: var(--pkured-dark);
+      font-size: clamp(2rem, 4.2vw, 5rem);
+      font-weight: 830;
+      letter-spacing: -0.06em;
+      line-height: 1;
+    }
+
+    .section-note {
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .model-header,
+    .model-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .model-header {
+      margin-bottom: 12px;
+    }
+
+    .model-name {
+      min-width: 0;
+      padding: 12px 10px;
+      border-top: 3px solid var(--pkured);
+      color: var(--pkured-dark);
+      background: var(--soft-red);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: clamp(0.58rem, 0.78vw, 0.75rem);
+      font-weight: 850;
+      letter-spacing: 0.04em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .model-name:last-child {
+      color: #fff;
+      background: var(--pkured);
+    }
+
+    .comparison-row {
+      margin-top: 34px;
+      padding-top: 22px;
+      border-top: 1px solid var(--line);
+    }
+
+    .caption {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin: 0 0 16px;
+      color: var(--ink);
+      font-size: clamp(0.88rem, 1.05vw, 1.05rem);
+      line-height: 1.5;
+    }
+
+    .caption-number {
+      flex: 0 0 auto;
+      color: var(--pkured);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.72rem;
+      font-weight: 850;
+      letter-spacing: 0.08em;
+    }
+
+    .video-card {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: #111;
+      transition: border-color 180ms ease, transform 180ms ease;
+    }
+
+    .video-card:hover {
+      border-color: var(--pkured);
+      transform: translateY(-3px);
+    }
+
+    .video-card video {
+      display: block;
+      width: 100%;
+      aspect-ratio: 5 / 4;
+      background: #111;
+      object-fit: contain;
+    }
+
+    .video-label {
+      display: block;
+      padding: 9px 10px;
+      color: #fff;
+      background: var(--pkured-dark);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.6rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .qualitative-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+
+    .qualitative-card {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: var(--soft-red);
+      align-self: start;
+      transition: border-color 180ms ease, transform 180ms ease;
+    }
+
+    .qualitative-card:hover {
+      border-color: var(--pkured);
+      transform: translateY(-3px);
+    }
+
+    .qualitative-card video {
+      display: block;
+      width: 100%;
+      aspect-ratio: 5 / 4;
+      background: #111;
+      object-fit: contain;
+    }
+
+    .qualitative-copy {
+      padding: 13px 14px 15px;
+      background: var(--soft-red);
+    }
+
+    .qualitative-id {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--pkured);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.62rem;
+      font-weight: 850;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .qualitative-caption {
+      margin: 0;
+      color: var(--ink);
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+
+    .method-section {
+      padding: 0 0 126px;
+    }
+
+    .method-figure-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 22px;
+    }
+
+    .method-figure-grid--four {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      align-items: start;
+    }
+
+    .method-figure {
+      min-width: 0;
+      margin: 0;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .method-figure--wide {
+      grid-column: 1 / -1;
+    }
+
+    .method-figure--split {
+      display: grid;
+      grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.75fr);
+      align-items: stretch;
+    }
+
+    .method-figure--split img {
+      align-self: center;
+    }
+
+    .method-figure--split .method-caption {
+      display: flex;
+      align-items: center;
+    }
+
+    .method-caption-inner {
+      width: min(100%, 42rem);
+      margin: 0 auto;
+    }
+
+    .method-caption-title {
+      display: block;
+      margin-bottom: 12px;
+      color: var(--pkured-dark);
+      font-size: clamp(1rem, 1.35vw, 1.28rem);
+      font-weight: 820;
+      line-height: 1.2;
+    }
+
+    .method-figure img {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #fff;
+    }
+
+    .method-caption {
+      margin: 0;
+      padding: 15px 17px 17px;
+      color: var(--ink);
+      background: var(--soft-red);
+      font-size: 0.84rem;
+      line-height: 1.5;
+    }
+
+    .method-caption strong {
+      color: var(--pkured-dark);
+      font-weight: 820;
+    }
+
+    .method-caption em { font-style: italic; }
+
+    .method-figure--compact img {
+      height: 250px;
+      object-fit: contain;
+    }
+
+    .method-figure--compact .method-caption {
+      display: flex;
+      min-height: 78px;
+      align-items: center;
+    }
+
+    .method-note {
+      margin: 22px 0 0;
+      padding: 18px 22px;
+      border-left: 4px solid var(--pkured);
+      color: var(--ink);
+      background: var(--soft-red);
+      font-size: 0.84rem;
+      line-height: 1.55;
+    }
+
+    .method-note strong {
+      color: var(--pkured-dark);
+      font-weight: 820;
+    }
+
+    footer {
+      border-top: 1px solid var(--line);
+      padding: 28px 0 40px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.66rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 980px) {
+      .model-header,
+      .model-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .model-header .model-name:nth-child(4),
+      .model-header .model-name:nth-child(5) { display: none; }
+      .qualitative-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .method-figure-grid--four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 640px) {
+      .page-shell { width: 88vw; }
+      .topbar-inner,
+      .section-heading { align-items: flex-start; flex-direction: column; }
+      .topbar-inner { justify-content: center; padding: 17px 0; }
+      .section-note { white-space: normal; }
+      .model-header,
+      .model-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .model-header .model-name:nth-child(3) { display: none; }
+      .model-header .model-name:nth-child(4),
+      .model-header .model-name:nth-child(5) { display: block; }
+      .qualitative-grid { grid-template-columns: 1fr; }
+      .method-figure-grid { grid-template-columns: 1fr; }
+      .method-figure--wide { grid-column: auto; }
+      .method-figure--split { grid-template-columns: 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      .video-card { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner page-shell">
+      <span class="wordmark">ReMoMask-2</span>
+      <span class="topbar-label">Motion generation comparison</span>
+    </div>
+  </header>
+
+  <section class="hero page-shell" aria-labelledby="page-title">
+    <p class="eyebrow">Latent retrieval-augmented generation</p>
+    <h1 id="page-title"><span class="title-accent">ReMoMask-2:</span> Latent Retrieval-Augmented Masked Motion Generation</h1>
+    <p class="hero-authors">
+      <strong><a class="author-link" href="https://scholar.google.com/citations?hl=en&amp;user=eg_nBF0AAAAJ" target="_blank" rel="noreferrer">Yiran Wang</a></strong><sup>1*</sup>,
+      <strong><a class="author-link" href="https://steve-zeyu-zhang.github.io/" target="_blank" rel="noreferrer">Zeyu Zhang</a></strong><sup>2*†</sup>,
+      <strong><a class="author-link" href="https://ling-shao.github.io/" target="_blank" rel="noreferrer">Ling Shao</a></strong><sup>3</sup>,
+      <strong><a class="author-link" href="https://ha0tang.github.io/" target="_blank" rel="noreferrer">Hao Tang</a></strong><sup>2‡</sup>
+    </p>
+    <p class="hero-affiliations"><sup>1</sup>USYD &nbsp;&nbsp; <sup>2</sup>School of Computer Science, Peking University &nbsp;&nbsp; <sup>3</sup>UCAS</p>
+    <p class="hero-contributions"><sup>*</sup>Equal contribution. <sup>†</sup>Project lead. <sup>‡</sup>Corresponding author.</p>
+    <nav class="hero-links" aria-label="Project links">
+      <a class="hero-button" href="https://arxiv.org/abs/2508.00000" target="_blank" rel="noreferrer">Paper</a>
+      <a class="hero-button" href="https://github.com/AIGeeksGroup/ReMoMask-2" target="_blank" rel="noreferrer">Code</a>
+      <a class="hero-button" href="https://huggingface.co/AIGeeksGroup/ReMoMask-2" target="_blank" rel="noreferrer">Model</a>
+    </nav>
+  </section>
+
+  <main>
+    <section class="comparison-section page-shell" aria-labelledby="comparison-title">
+      <div class="section-heading">
+        <h2 id="comparison-title">Comparison</h2>
+        <span class="section-note">Same prompt across five models</span>
+      </div>
+
+      <div class="model-header" aria-label="Model columns">
+        <div class="model-name">MoGenTS</div>
+        <div class="model-name">ReMoDiffuse</div>
+        <div class="model-name">TMR</div>
+        <div class="model-name">ReMoMask</div>
+        <div class="model-name">ReMoMask-2</div>
+      </div>
+
+      <article class="comparison-row">
+        <p class="caption"><span class="caption-number">01 /</span><span>A man walks forwards and then stops.</span></p>
+        <div class="model-grid">
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="MoGenTS prompt 01"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/MoGenTS_c01.mp4" type="video/mp4"></video><span class="video-label">MoGenTS</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="ReMoDiffuse prompt 01"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/ReMoDiffuse_c01.mp4" type="video/mp4"></video><span class="video-label">ReMoDiffuse</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="TMR prompt 01"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/TMR_c01.mp4" type="video/mp4"></video><span class="video-label">TMR</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="ReMoMask prompt 01"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/ReMoMask-1_c01.mp4" type="video/mp4"></video><span class="video-label">ReMoMask</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="ReMoMask-2 prompt 01"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/ReMoMask-2_c01.mp4" type="video/mp4"></video><span class="video-label">ReMoMask-2</span></div>
+        </div>
+      </article>
+
+      <article class="comparison-row">
+        <p class="caption"><span class="caption-number">02 /</span><span>A person is balancing on something.</span></p>
+        <div class="model-grid">
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="MoGenTS prompt 02"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/MoGenTS_c02.mp4" type="video/mp4"></video><span class="video-label">MoGenTS</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="ReMoDiffuse prompt 02"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/ReMoDiffuse_c02.mp4" type="video/mp4"></video><span class="video-label">ReMoDiffuse</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="TMR prompt 02"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/TMR_c02.mp4" type="video/mp4"></video><span class="video-label">TMR</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="ReMoMask prompt 02"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/ReMoMask-1_c02.mp4" type="video/mp4"></video><span class="video-label">ReMoMask</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="ReMoMask-2 prompt 02"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/ReMoMask-2_c02.mp4" type="video/mp4"></video><span class="video-label">ReMoMask-2</span></div>
+        </div>
+      </article>
+
+      <article class="comparison-row">
+        <p class="caption"><span class="caption-number">03 /</span><span>A man walks forward in a clumsy way.</span></p>
+        <div class="model-grid">
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="MoGenTS prompt 03"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/MoGenTS_c03.mp4" type="video/mp4"></video><span class="video-label">MoGenTS</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="ReMoDiffuse prompt 03"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/ReMoDiffuse_c03.mp4" type="video/mp4"></video><span class="video-label">ReMoDiffuse</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="TMR prompt 03"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/TMR_c03.mp4" type="video/mp4"></video><span class="video-label">TMR</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="ReMoMask prompt 03"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/ReMoMask-1_c03.mp4" type="video/mp4"></video><span class="video-label">ReMoMask</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="ReMoMask-2 prompt 03"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/ReMoMask-2_c03.mp4" type="video/mp4"></video><span class="video-label">ReMoMask-2</span></div>
+        </div>
+      </article>
+
+      <article class="comparison-row">
+        <p class="caption"><span class="caption-number">04 /</span><span>A person walks forward rather slowly.</span></p>
+        <div class="model-grid">
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="MoGenTS prompt 04"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/MoGenTS_c04.mp4" type="video/mp4"></video><span class="video-label">MoGenTS</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="ReMoDiffuse prompt 04"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/ReMoDiffuse_c04.mp4" type="video/mp4"></video><span class="video-label">ReMoDiffuse</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="TMR prompt 04"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/TMR_c04.mp4" type="video/mp4"></video><span class="video-label">TMR</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="ReMoMask prompt 04"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/ReMoMask-1_c04.mp4" type="video/mp4"></video><span class="video-label">ReMoMask</span></div>
+          <div class="video-card"><video controls autoplay muted loop playsinline preload="metadata" aria-label="ReMoMask-2 prompt 04"><source src="remomaskv2_vids/compare_prompt_is_same_asv1/ReMoMask-2_c04.mp4" type="video/mp4"></video><span class="video-label">ReMoMask-2</span></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="comparison-section page-shell" aria-labelledby="qualitative-title">
+      <div class="section-heading">
+        <h2 id="qualitative-title">Qualitative Visualization</h2>
+        <span class="section-note">Caption-guided motion samples</span>
+      </div>
+
+      <div class="qualitative-grid">
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Backward walk qualitative sample"><source src="remomaskv2_vids/qualitative/q02_backward_walk.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 01</span><p class="qualitative-caption">A person walks backward in a straight line.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Sideways steps qualitative sample"><source src="remomaskv2_vids/qualitative/q03_sideways_steps.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 02</span><p class="qualitative-caption">A person takes several sideways steps while keeping their body facing forward.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Jumping jacks qualitative sample"><source src="remomaskv2_vids/qualitative/q07_jumping_jacks.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 03</span><p class="qualitative-caption">A person performs jumping jacks, opening and closing both arms and legs.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Vertical jump qualitative sample"><source src="remomaskv2_vids/qualitative/q09_vertical_jump.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 04</span><p class="qualitative-caption">A person jumps upward from both feet and lands in the same spot.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Right hand wave qualitative sample"><source src="remomaskv2_vids/qualitative/q14_right_hand_wave.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 05</span><p class="qualitative-caption">A person waves their right hand above shoulder height while standing still.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Forward bend qualitative sample"><source src="remomaskv2_vids/qualitative/q26_forward_bend.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 06</span><p class="qualitative-caption">A person bends forward at the waist with their arms hanging down.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Explaining gestures qualitative sample"><source src="remomaskv2_vids/qualitative/q27_explaining_gestures.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 07</span><p class="qualitative-caption">A person gestures with both hands while explaining something.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Point forward right qualitative sample"><source src="remomaskv2_vids/qualitative/q28_point_forward_right.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 08</span><p class="qualitative-caption">A person points forward with their right arm.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Small forward jump qualitative sample"><source src="remomaskv2_vids/qualitative/q42_small_forward_jump.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 09</span><p class="qualitative-caption">A person makes a small jump forward from both feet.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Slow right side steps qualitative sample"><source src="remomaskv2_vids/qualitative/q43_slow_right_side_steps.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 10</span><p class="qualitative-caption">A person takes slow sideways steps to the right.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Right arm reach qualitative sample"><source src="remomaskv2_vids/qualitative/q51_right_arm_reach.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 11</span><p class="qualitative-caption">A person reaches upward with the right arm.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Easy jog qualitative sample"><source src="remomaskv2_vids/qualitative/q52_easy_jog.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 12</span><p class="qualitative-caption">A person jogs at an easy pace.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Forward run qualitative sample"><source src="remomaskv2_vids/qualitative/q53_forward_run.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 13</span><p class="qualitative-caption">A person runs forward quickly, pumping both arms.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Reach toward toes qualitative sample"><source src="remomaskv2_vids/qualitative/q55_reach_toward_toes.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 14</span><p class="qualitative-caption">A person bends forward and reaches both hands toward their toes.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Arm swing forward bend qualitative sample"><source src="remomaskv2_vids/qualitative/q64_arm_swing_forward_bend.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 15</span><p class="qualitative-caption">A person warms up by swinging both arms and bending their upper body forward.</p></div>
+        </article>
+        <article class="qualitative-card">
+          <video controls autoplay muted loop playsinline preload="metadata" aria-label="Short bow qualitative sample"><source src="remomaskv2_vids/qualitative/q67_short_bow.mp4" type="video/mp4"></video>
+          <div class="qualitative-copy"><span class="qualitative-id">Sample 16</span><p class="qualitative-caption">A person gives a short bow.</p></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="method-section page-shell" aria-labelledby="method-title">
+      <div class="section-heading">
+        <h2 id="method-title">Method</h2>
+        <span class="section-note">Retrieval, masking, and evaluation</span>
+      </div>
+
+      <div class="method-figure-grid method-figure-grid--four">
+        <figure class="method-figure method-figure--wide method-figure--split">
+          <img src="img/teaser.png" alt="Comparison between ReMoMask and ReMoMask-2">
+          <figcaption class="method-caption"><span class="method-caption-inner"><strong class="method-caption-title">ReMoMask vs ReMoMask-2.</strong><span>(a) ReMoMask retrieves motion clips from a database outside the generator, so every reference crosses the boundary between the two regions. (b) ReMoMask-2 rebuilds the database from the generator's own latents, so store, references and mask tokens share one substrate and nothing crosses.</span></span></figcaption>
+        </figure>
+
+        <figure class="method-figure method-figure--wide">
+          <img src="img/framework.png" alt="Framework of ReMoMask-2">
+          <figcaption class="method-caption"><strong>Framework of ReMoMask-2.</strong> (a) The retrieval database is built offline by the frozen RVQ-VAE encoder <em>E</em>: each motion becomes a pre-quantisation latent grid, pooled and &#8467;<sub>2</sub>-normalised into a key. (b) A query projector <em>&#966;</em>, distilled from the frozen HBM retriever, maps text into that same key space, so cosine retrieval returns evidence already expressed in the generator's representation. (c) <strong>T</strong>opology <strong>S</strong>tructured <strong>M</strong>asking (TSM) and (d) <strong>S</strong>emantic <strong>S</strong>patial&#8211;<strong>T</strong>emporal <strong>A</strong>ttention (SSTA) are inherited unchanged from ReMoMask, except that <em>R<sub>t</sub></em> may now enter the Value pathway.</figcaption>
+        </figure>
+
+        <figure class="method-figure method-figure--compact">
+          <img src="img/scatter_rebuttal.png" alt="Comparison on FID and inference cost">
+          <figcaption class="method-caption">Comparison on FID and Inference Cost.</figcaption>
+        </figure>
+
+        <figure class="method-figure method-figure--compact">
+          <img src="img/db_coverage_v2.png" alt="Effect of retrieval database coverage on HumanML3D">
+          <figcaption class="method-caption">Effect of retrieval database coverage on HumanML3D.</figcaption>
+        </figure>
+
+        <figure class="method-figure method-figure--compact">
+          <img src="img/question_2.png" alt="Motion quality user study">
+          <figcaption class="method-caption">Motion Quality User Study.</figcaption>
+        </figure>
+
+        <figure class="method-figure method-figure--compact">
+          <img src="img/question_1.png" alt="Text-motion correspondence user study">
+          <figcaption class="method-caption">Text-Motion Correspondence User Study.</figcaption>
+        </figure>
+      </div>
+      <p class="method-note"><strong>Database coverage protocol.</strong> Subsets of the latent-aligned database are drawn uniformly at random with a shared seed across points and are swapped in at inference time only: the generator, the query projector, and the training recipe are those of the deployed model throughout, so these points share the intervention protocol of the ablation ladder. The dashed line marks the no-retrieval setting; 100% is the deployed configuration.</p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="page-shell">ReMoMask-2 · Latent Retrieval-Augmented Motion Generation</div>
+  </footer>
+</body>
+</html>
