@@ -1,0 +1,28 @@
+exp_name: exp_for_mtrans
+checkpoints_dir: ./Part_TMR/checkpoints/${exp_name}/${dataset.dataset_name}
+device: cuda:0
+hydra:
+  run:
+    dir: ./Part_TMR/checkpoints/${exp_name}/${dataset.dataset_name}
+defaults:
+  - _self_
+  - dataset: HumanML3D
+  - train: train
+rag:
+  database_path: database
+preprocess:
+  padding: true
+model:
+  text_encoder: ViT-B-32.pt
+  use_hbm_loss: true
+  lambda_part: 1.0
+  embed_dim: 512
+  queue_size: 65536
+  part_queue_size: 65536
+  momentum: 0.999
+  motion_embedding_dims: 512
+  text_embedding_dims: 512
+  projection_dims: 512
+eval:
+  eval_train: false
+  use_best_model: true
