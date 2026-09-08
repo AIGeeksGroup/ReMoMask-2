@@ -4,7 +4,7 @@
 >
 > \*Equal contribution. <sup>†</sup>Project lead. <sup>‡</sup>Corresponding author.
 >
-> ### arXiv: Coming soon | Project Page: Coming soon | [Model](https://huggingface.co/AIGeeksGroup/ReMoMask-2)
+> ### [Paper]() | [Website](https://aigeeksgroup.github.io/ReMoMask-2/) | [Model](https://huggingface.co/AIGeeksGroup/ReMoMask-2)
 
 ---
 
