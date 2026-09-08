@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+logs/
+outputs/
+dataset/
+database*/
+checkpoints/
+Part_TMR/checkpoints/
+glove/
+*.pt
+*.pth
+*.tar
+*.zip
+ViT-B-32.pt
