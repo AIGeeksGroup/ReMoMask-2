@@ -8,7 +8,7 @@ This repo is the official implementation of:
 >
 > \*Equal contribution. <sup>†</sup>Project lead. <sup>‡</sup>Corresponding author.
 >
-> ### [Paper]() | [Website](https://aigeeksgroup.github.io/ReMoMask-2/) | [Model](https://huggingface.co/AIGeeksGroup/ReMoMask-2)
+> ### [Paper](https://arxiv.org/abs/2609.08365) | [Website](https://aigeeksgroup.github.io/ReMoMask-2/) | [Model](https://huggingface.co/AIGeeksGroup/ReMoMask-2)
 
 ---
 
