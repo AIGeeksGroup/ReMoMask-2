@@ -12,6 +12,19 @@ This repo is the official implementation of:
 
 ---
 
+## Citation
+
+```
+@article{huang2026mobilevla,
+  title={MobileVLA-R1 2.0: RL-Enhanced Reasoning for Mobile Robot Control},
+  author={Huang, Ting and Huang, Yue and Zhang, Zeyu and Yan, Shuicheng and Tang, Hao},
+  journal={arXiv preprint arXiv:2609.06251},
+  year={2026}
+}
+```
+
+---
+
 ## 🤗 Prerequisite
 
 <details>
