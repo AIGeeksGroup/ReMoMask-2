@@ -1,5 +1,7 @@
 # <img src="./assets/remomask_logo.png" alt="ReMoMask logo" width="30"/> ReMoMask-2: Latent Retrieval-Augmented Masked Motion Generation
 
+[![Papers with Code: #2 on HumanML3D](https://paperswithcode.co/api/v1/papers/2609.08365/leaderboard-badge.svg?eval=30383&live=1)](https://paperswithcode.co/api/v1/papers/2609.08365/leaderboard-badge-link?eval=30383)
+
 This repo is the official implementation of:
 
 > **ReMoMask-2: Latent Retrieval-Augmented Masked Motion Generation**
